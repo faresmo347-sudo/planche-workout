@@ -60,20 +60,26 @@ const itemVariants = {
 /*  Hydration-safe greeting store                                      */
 /* ------------------------------------------------------------------ */
 
-// Cached server snapshot to avoid infinite loop in useSyncExternalStore
+// Cached snapshots to avoid infinite loop in useSyncExternalStore
 const SERVER_GREETING = { text: 'Hello', Icon: Sun } as const
+let _clientGreeting: { text: string; Icon: typeof Sun } | null = null
+
+function getGreetingSnapshot() {
+  if (!_clientGreeting) {
+    const hour = new Date().getHours()
+    if (hour < 12) _clientGreeting = { text: 'Good morning', Icon: Sun }
+    else if (hour < 17) _clientGreeting = { text: 'Good afternoon', Icon: Sun }
+    else _clientGreeting = { text: 'Good evening', Icon: Moon }
+  }
+  return _clientGreeting
+}
+
 function getServerGreetingSnapshot() { return SERVER_GREETING }
 function serverGreetingSubscribe() { return () => {} }
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-function getGreeting(): { text: string; Icon: typeof Sun } {
-  const hour = new Date().getHours()
-  if (hour < 12) return { text: 'Good morning', Icon: Sun }
-  if (hour < 17) return { text: 'Good afternoon', Icon: Sun }
-  return { text: 'Good evening', Icon: Moon }
-}
 
 function getMonthsElapsed(startDate: string): number {
   const start = new Date(startDate)
@@ -287,10 +293,10 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
 
   const monthsElapsed = profile ? getMonthsElapsed(profile.startDate) : 0
 
-  // Hydration-safe greeting: useSyncExternalStore with cached server snapshot
+  // Hydration-safe greeting: useSyncExternalStore with cached snapshots
   const { text: greeting, Icon: GreetingIcon } = useSyncExternalStore(
     serverGreetingSubscribe,
-    getGreeting,
+    getGreetingSnapshot,
     getServerGreetingSnapshot
   )
 
