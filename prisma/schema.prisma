@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model UserProfile {
+  id            String   @id @default(cuid())
+  age           Int      @default(16)
+  heightCm      Int      @default(175)
+  weightKg      Float    @default(70)
+  pullUpsMax    Int      @default(15)
+  muscleUpsMax  Int      @default(3)
+  pushUpsMax    Int      @default(48)
+  plancheStage  Int      @default(1)
+  flStage       Int      @default(1)
+  startDate     DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Skill {
+  id          String    @id @default(cuid())
+  name        String    @unique // "planche" or "front_lever"
+  label       String    // Display name
+  icon        String?   // Icon name
+  stages      Stage[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Stage {
+  id              String   @id @default(cuid())
+  skillId         String
+  stageNumber     Int      // 1-4
+  name            String   // e.g. "Tuck & Advanced Tuck Planche"
+  goalDescription String   // What the user should achieve
+  startMonth      Int      // Approx start month
+  endMonth        Int      // Approx end month
+  targetHoldMin   Int?     // Min hold time in seconds for stage completion
+  targetHoldMax   Int?     // Max hold time 
+  skill           Skill    @relation(fields: [skillId], references: [id])
+  exercises       Exercise[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Exercise {
+  id                String   @id @default(cuid())
+  stageId           String
+  name              String
+  category          String   // "skill", "accessory", "core", "warmup", "cooldown"
+  type              String   // "isometric", "dynamic", "eccentric"
+  description       String?
+  formCues          String?  // JSON array of form cues
+  targetSetsMin     Int      @default(3)
+  targetSetsMax     Int      @default(5)
+  targetRepsMin     Int?     // For dynamic exercises
+  targetRepsMax     Int?     // For dynamic exercises
+  targetHoldMin     Int?     // For isometric - seconds
+  targetHoldMax     Int?     // For isometric - seconds
+  restSeconds       Int      @default(180) // 3 min default for skills
+  equipment         String?  // What equipment needed
+  progressionOrder  Int      // Order within stage
+  stage             Stage    @relation(fields: [stageId], references: [id])
+  logs              ExerciseLog[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model WorkoutSession {
+  id            String        @id @default(cuid())
+  date          DateTime      @default(now())
+  dayType       String        // "planche_focus", "fl_focus", "rest", "combined"
+  weekNumber    Int           // Week number in the program
+  isDeload      Boolean       @default(false)
+  completed     Boolean       @default(false)
+  notes         String?
+  logs          ExerciseLog[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model ExerciseLog {
+  id              String   @id @default(cuid())
+  sessionId       String
+  exerciseId      String
+  setNumber       Int
+  holdTimeSeconds Int?     // For isometric exercises
+  reps            Int?     // For dynamic exercises
+  weightKg        Float?   // For weighted exercises
+  rpe             Int?     // Rate of perceived exertion 1-10
+  leanDistanceCm  Float?   // For PPPU tracking
+  bandAssistance  String?  // Band thickness level
+  painReported    Boolean  @default(false)
+  painNotes       String?
+  exercise        Exercise     @relation(fields: [exerciseId], references: [id])
+  session         WorkoutSession @relation(fields: [sessionId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model MaxHold {
+  id              String   @id @default(cuid())
+  exerciseName    String   @unique
+  maxHoldSeconds  Float    // Current max hold time
+  lastTestedAt    DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PainReport {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  bodyPart    String
+  severity    Int      // 1-10
+  exerciseId  String?
+  notes       String?
+  actionTaken String?  // What the app suggested
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
