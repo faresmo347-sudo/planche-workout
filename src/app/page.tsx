@@ -7,13 +7,15 @@ import {
   Dumbbell,
   BarChart3,
   Heart,
+  Layers,
 } from 'lucide-react'
 import Dashboard from '@/components/dashboard'
 import WorkoutView from '@/components/workout-view'
 import ProgressView from '@/components/progress-view'
+import PhaseWorkoutsView from '@/components/phase-workouts-view'
 import { PainDialog } from '@/components/pain-dialog'
 
-type TabId = 'dashboard' | 'workout' | 'progress'
+type TabId = 'dashboard' | 'workout' | 'phases' | 'progress'
 
 interface TabConfig {
   id: TabId
@@ -24,6 +26,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { id: 'dashboard', label: 'Home', icon: HomeIcon },
   { id: 'workout', label: 'Workout', icon: Dumbbell },
+  { id: 'phases', label: 'Phases', icon: Layers },
   { id: 'progress', label: 'Progress', icon: BarChart3 },
 ]
 
@@ -53,6 +56,9 @@ export default function Home() {
             {activeTab === 'workout' && (
               <WorkoutView />
             )}
+            {activeTab === 'phases' && (
+              <PhaseWorkoutsView />
+            )}
             {activeTab === 'progress' && (
               <ProgressView />
             )}
@@ -62,7 +68,7 @@ export default function Home() {
 
       {/* Bottom Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-t border-border/50">
-        <div className="max-w-2xl mx-auto px-4">
+        <div className="max-w-2xl mx-auto px-2">
           <div className="flex items-center justify-around h-16">
             {TABS.map((tab) => {
               const isActive = activeTab === tab.id
@@ -72,7 +78,7 @@ export default function Home() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    flex flex-col items-center justify-center gap-0.5 w-16 h-12
+                    flex flex-col items-center justify-center gap-0.5 w-14 h-12
                     rounded-xl transition-all duration-200
                     ${isActive
                       ? 'text-primary'
@@ -103,7 +109,7 @@ export default function Home() {
             <button
               onClick={() => setShowPainDialog(true)}
               className={`
-                flex flex-col items-center justify-center gap-0.5 w-16 h-12
+                flex flex-col items-center justify-center gap-0.5 w-14 h-12
                 rounded-xl transition-all duration-200
                 text-rose-400/70 hover:text-rose-500
               `}

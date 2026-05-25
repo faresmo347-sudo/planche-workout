@@ -1,26 +1,25 @@
 ---
 Task ID: 1
-Agent: Main
-Task: Build personalized calisthenics workout app from PDF prompt
+Agent: Main Agent
+Task: Add Phase Explorer - browse workouts for every training phase
 
 Work Log:
-- Read and analyzed the AI Training App PDF prompt for a 2.5-year Planche & Front Lever mastery program
-- Designed and created Prisma schema with models: UserProfile, Skill, Stage, Exercise, WorkoutSession, ExerciseLog, MaxHold, PainReport
-- Seeded database with complete exercise data: 4 Planche stages, 4 Front Lever stages, warmup/cooldown exercises, initial max holds
-- Created 7 API routes: /api/profile, /api/skills, /api/workout/today, /api/workout/log, /api/progress, /api/pain, /api/maxholds
-- Implemented Prilepin table logic for isometric holds, deload week detection, day-of-week workout scheduling
-- Built Dashboard component with greeting, skill progress cards, workout preview, quick stats
-- Built WorkoutView component (1800+ lines) with circular timer, set tracker, RPE input, rest timer, form guidance sheet, exercise cards for isometric/dynamic/eccentric types
-- Built ProgressView component with stage timeline, Recharts charts (line + bar), workout history with collapsibles, max holds visualization
-- Built PainDialog component with body part selector, severity slider with gradient, severity-based suggestions, recent reports
-- Created calm sage green + warm neutrals color scheme (oklch-based CSS variables)
-- Added bottom tab navigation with animated indicator
-- Verified lint passes and app compiles/serves successfully
+- Fixed the `Home` naming conflict in page.tsx (Home icon vs Home function)
+- Explored the full codebase: dashboard, workout-view, progress-view, pain-dialog, API routes, Prisma schema
+- Determined that the `/api/skills` endpoint already returns all stages with exercises, so no new API endpoint was needed
+- Created `src/components/phase-workouts-view.tsx` - a new Phase Explorer component with:
+  - Planche / Front Lever skill selector buttons
+  - Interactive phase timeline (stages 1-4) with current stage highlighting
+  - Detailed stage card showing: goal, exercise count, duration, target hold times
+  - Exercises grouped by category (skill, accessory, core, warmup, cooldown) with type icons
+  - "All Phases at a Glance" summary card
+  - Calm sage-green aesthetic matching the existing app
+  - Framer Motion animations for smooth transitions
+- Updated `src/app/page.tsx` to add "Phases" tab (Layers icon) in the bottom navigation
+- Fixed ESLint errors about creating components during render (changed dynamic icon resolution to conditional rendering)
+- Verified lint passes and dev server compiles successfully
 
 Stage Summary:
-- Full-stack personalized calisthenics workout app
-- 3 main views: Dashboard, Workout, Progress
-- Mobile-first with calm, soothing design (sage greens, warm neutrals)
-- Progressive overload algorithms following Prilepin tables
-- Complete 2.5-year macrocycle with 4 stages per skill
-- Pain monitoring and form guidance integrated throughout
+- New file: `src/components/phase-workouts-view.tsx`
+- Modified: `src/app/page.tsx` (added Phases tab + Layers icon import)
+- Feature: Users can now browse all 4 training phases for both Planche and Front Lever, see exercises per phase, and understand the full training roadmap
