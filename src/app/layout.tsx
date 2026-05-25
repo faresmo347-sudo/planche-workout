@@ -17,6 +17,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Calisthenics Training App",
   description: "Personalized calisthenics workout program for planche and front lever progression",
+  icons: {
+    icon: [
+      { url: "/logo.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -26,6 +32,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/logo.png" type="image/png" sizes="512x512" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
