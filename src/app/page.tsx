@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Home,
+  Home as HomeIcon,
   Dumbbell,
   BarChart3,
   Heart,
@@ -22,7 +22,7 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { id: 'dashboard', label: 'Home', icon: Home },
+  { id: 'dashboard', label: 'Home', icon: HomeIcon },
   { id: 'workout', label: 'Workout', icon: Dumbbell },
   { id: 'progress', label: 'Progress', icon: BarChart3 },
 ]
