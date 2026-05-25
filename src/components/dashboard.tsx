@@ -57,6 +57,15 @@ const itemVariants = {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Hydration-safe greeting store                                      */
+/* ------------------------------------------------------------------ */
+
+// Cached server snapshot to avoid infinite loop in useSyncExternalStore
+const SERVER_GREETING = { text: 'Hello', Icon: Sun } as const
+function getServerGreetingSnapshot() { return SERVER_GREETING }
+function serverGreetingSubscribe() { return () => {} }
+
+/* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 function getGreeting(): { text: string; Icon: typeof Sun } {
@@ -278,12 +287,11 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
 
   const monthsElapsed = profile ? getMonthsElapsed(profile.startDate) : 0
 
-  // Hydration-safe greeting: useSyncExternalStore with server snapshot
-  const emptySubscribe = () => () => {}
+  // Hydration-safe greeting: useSyncExternalStore with cached server snapshot
   const { text: greeting, Icon: GreetingIcon } = useSyncExternalStore(
-    emptySubscribe,
-    () => getGreeting(),
-    () => ({ text: 'Hello', Icon: Sun })
+    serverGreetingSubscribe,
+    getGreeting,
+    getServerGreetingSnapshot
   )
 
   const isRestDay = workout?.dayType === 'rest'
