@@ -1,6 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import { useSyncExternalStore } from 'react'
 import { motion } from 'framer-motion'
 import {
   Card,
@@ -276,7 +277,14 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
   const flSkill = skills.find((s) => s.name === 'front_lever')
 
   const monthsElapsed = profile ? getMonthsElapsed(profile.startDate) : 0
-  const { text: greeting, Icon: GreetingIcon } = getGreeting()
+
+  // Hydration-safe greeting: useSyncExternalStore with server snapshot
+  const emptySubscribe = () => () => {}
+  const { text: greeting, Icon: GreetingIcon } = useSyncExternalStore(
+    emptySubscribe,
+    () => getGreeting(),
+    () => ({ text: 'Hello', Icon: Sun })
+  )
 
   const isRestDay = workout?.dayType === 'rest'
   const nonWarmupExercises = workout ? getNonWarmupExercises(workout.sections) : []
