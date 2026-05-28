@@ -24,6 +24,7 @@ import {
   Play,
   Moon,
   Sun,
+  RotateCcw,
 } from 'lucide-react'
 import type {
   ProfileData,
@@ -265,6 +266,29 @@ function SkillProgressCard({
 /*  Main Dashboard Component                                           */
 /* ------------------------------------------------------------------ */
 export default function Dashboard({ setActiveTab }: DashboardProps) {
+  /* ---- in-progress workout check (hydration-safe) ---- */
+  const hasInProgressWorkout = useSyncExternalStore(
+    // Subscribe: localStorage doesn't fire events we can listen to cross-tab here,
+    // so we return a no-op unsubscribe.
+    () => () => {},
+    // Client snapshot
+    () => {
+      try {
+        const savedRaw = localStorage.getItem('workout-progress')
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw)
+          const today = new Date().toISOString().split('T')[0]
+          return saved.date === today
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
+      return false
+    },
+    // Server snapshot — always false to avoid hydration mismatch
+    () => false
+  )
+
   /* ---- data queries ---- */
   const profileQuery = useQuery({
     queryKey: ['profile'],
@@ -346,6 +370,39 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
           )}
         </div>
       </motion.div>
+
+      {/* ============ RESUME WORKOUT BANNER ============ */}
+      {hasInProgressWorkout && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="rounded-2xl shadow-sm bg-primary/5 border-primary/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shrink-0">
+                <RotateCcw className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  Workout in Progress
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  You have an unfinished workout today. Resume where you left off.
+                </p>
+              </div>
+              <Button
+                onClick={() => setActiveTab('workout')}
+                size="sm"
+                className="shrink-0 rounded-xl min-h-[40px]"
+              >
+                <Play className="w-3.5 h-3.5 mr-1" />
+                Resume
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* ============ SKILL PROGRESS CARDS ============ */}
       <motion.div

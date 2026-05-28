@@ -54,7 +54,7 @@ export default function Home() {
               <Dashboard setActiveTab={handleTabChange} />
             )}
             {activeTab === 'workout' && (
-              <WorkoutView />
+              <WorkoutView setActiveTab={handleTabChange} />
             )}
             {activeTab === 'phases' && (
               <PhaseWorkoutsView />

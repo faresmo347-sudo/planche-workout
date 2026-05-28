@@ -1171,29 +1171,277 @@ function SectionHeader({ name, icon, exerciseCount, completedCount, isCurrent }:
 
 // ─── CompletionScreen ────────────────────────────────────────────────────────
 
-function CompletionScreen() {
+interface CompletionScreenProps {
+  workout: ApiWorkoutResponse
+  exerciseStates: Record<string, ExerciseState>
+  onBackToHome: () => void
+}
+
+function CompletionScreen({ workout, exerciseStates, onBackToHome }: CompletionScreenProps) {
+  // Calculate workout summary stats
+  const completedExercises = SECTION_ORDER.flatMap((key) => workout.sections[key]).filter(
+    (ex) => exerciseStates[ex.id]?.isComplete
+  )
+  const totalSets = Object.values(exerciseStates).reduce(
+    (sum, state) => sum + state.completedSets,
+    0
+  )
+
+  // Estimate total workout time from logged sets
+  const estimatedMinutes = (() => {
+    let seconds = 0
+    // Add hold times from isometric/eccentric sets
+    for (const state of Object.values(exerciseStates)) {
+      for (const set of state.sets) {
+        if (set.holdTimeSeconds) seconds += set.holdTimeSeconds
+        // Estimate ~3s per rep for dynamic exercises
+        if (set.reps) seconds += set.reps * 3
+      }
+    }
+    // Add rest periods between sets (approx 90s per set)
+    seconds += totalSets * 90
+    // Add warmup/cooldown buffer
+    if (workout.sections.warmup.length > 0) seconds += 600
+    if (workout.sections.cooldown.length > 0) seconds += 480
+    return Math.max(1, Math.round(seconds / 60))
+  })()
+
+  // Calculate weekly progress (workouts this week from logged sets)
+  const focusLabel = workout.focusSkill === 'planche' ? 'Planche' : 'Front Lever'
+  const stageLabel = workout.stageName || `Stage ${workout.focusStage ?? 1}`
+
+  // Build exercise list grouped by section
+  const exerciseSummary = SECTION_ORDER
+    .filter((key) => workout.sections[key].length > 0)
+    .map((key) => ({
+      sectionKey: key,
+      label: SECTION_LABELS[key],
+      icon: SECTION_ICONS[key],
+      exercises: workout.sections[key].map((ex) => ({
+        name: ex.name,
+        type: ex.type,
+        completedSets: exerciseStates[ex.id]?.completedSets ?? 0,
+        totalSets: ex.targetSetsMax,
+        isComplete: exerciseStates[ex.id]?.isComplete ?? false,
+        bestHold: exerciseStates[ex.id]?.sets.reduce(
+          (max, s) => Math.max(max, s.holdTimeSeconds ?? 0),
+          0
+        ),
+        bestReps: exerciseStates[ex.id]?.sets.reduce(
+          (max, s) => Math.max(max, s.reps ?? 0),
+          0
+        ),
+      })),
+    }))
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
+      initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center justify-center py-16 space-y-4"
+      className="w-full max-w-md mx-auto space-y-6 py-6"
     >
+      {/* ─── Celebration Header ──────────────────────── */}
+      <div className="flex flex-col items-center text-center space-y-3">
+        <motion.div
+          animate={{ scale: [1, 1.15, 1] }}
+          transition={{ duration: 0.6, repeat: 2 }}
+          className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center"
+        >
+          <Trophy className="w-10 h-10 text-primary" />
+        </motion.div>
+        <motion.h2
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="text-2xl font-semibold text-foreground"
+        >
+          Workout Complete!
+        </motion.h2>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="text-muted-foreground text-sm max-w-xs"
+        >
+          Great job finishing your session. Rest up and come back stronger next time.
+        </motion.p>
+      </div>
+
+      {/* ─── Quick Stats Row ──────────────────────── */}
       <motion.div
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ duration: 0.5, repeat: 2 }}
-        className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="grid grid-cols-3 gap-3"
       >
-        <Trophy className="w-10 h-10 text-primary" />
+        <Card className="rounded-xl shadow-sm bg-card">
+          <CardContent className="p-3 flex flex-col items-center text-center">
+            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 mb-1.5">
+              <Flame className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <span className="text-lg font-semibold leading-none">
+              {completedExercises.length}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-1">
+              Exercises
+            </span>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl shadow-sm bg-card">
+          <CardContent className="p-3 flex flex-col items-center text-center">
+            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 mb-1.5">
+              <Check className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <span className="text-lg font-semibold leading-none">
+              {totalSets}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-1">
+              Sets
+            </span>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl shadow-sm bg-card">
+          <CardContent className="p-3 flex flex-col items-center text-center">
+            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 mb-1.5">
+              <Clock className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <span className="text-lg font-semibold leading-none">
+              ~{estimatedMinutes}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-1">
+              Minutes
+            </span>
+          </CardContent>
+        </Card>
       </motion.div>
-      <h2 className="text-2xl font-semibold text-foreground">Workout Complete!</h2>
-      <p className="text-muted-foreground text-center max-w-xs">
-        Great job finishing your session. Rest up and come back stronger next time.
-      </p>
+
+      {/* ─── Exercise Summary ──────────────────────── */}
       <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+      >
+        <Card className="rounded-2xl shadow-sm bg-card">
+          <CardHeader className="pb-2 px-5 pt-5">
+            <CardTitle className="text-base">Exercise Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
+              {exerciseSummary.map((section) => (
+                <div key={section.sectionKey}>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5">
+                    {section.icon} {section.label}
+                  </p>
+                  <div className="space-y-1">
+                    {section.exercises.map((ex, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                              ex.isComplete
+                                ? 'bg-primary text-primary-foreground'
+                                : 'border border-border'
+                            }`}
+                          >
+                            {ex.isComplete && <Check className="w-2.5 h-2.5" />}
+                          </div>
+                          <span className="text-sm truncate">{ex.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {ex.bestHold > 0 && (
+                            <span className="text-[10px] text-primary font-medium tabular-nums">
+                              {ex.bestHold.toFixed(1)}s
+                            </span>
+                          )}
+                          {ex.bestReps > 0 && (
+                            <span className="text-[10px] text-primary font-medium tabular-nums">
+                              {ex.bestReps} reps
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {ex.completedSets}/{ex.totalSets}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ─── Progress Toward Next Phase ──────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8 }}
+      >
+        <Card className="rounded-2xl shadow-sm bg-card">
+          <CardHeader className="pb-2 px-5 pt-5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10">
+                <ChevronRight className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Progress</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Week {workout.weekNumber} &middot; {DAY_TYPE_LABELS[workout.dayType] || workout.dayType}
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Current Focus</span>
+              <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0">
+                {focusLabel} &middot; {stageLabel}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Today&apos;s Session</span>
+              <span className="text-sm font-medium text-primary">Completed</span>
+            </div>
+            {workout.isDeload && (
+              <div className="rounded-xl bg-primary/5 p-2.5 text-center">
+                <p className="text-xs text-primary font-medium">Deload Week — Recovery is progress</p>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Keep showing up consistently. Each session builds toward your next stage advancement.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ─── Back to Home Button ──────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.0 }}
+        className="pt-2"
+      >
+        <Button
+          onClick={onBackToHome}
+          className="w-full min-h-[52px] rounded-xl text-base font-medium"
+          size="lg"
+        >
+          <ChevronLeft className="w-5 h-5 mr-2" />
+          Back to Home
+        </Button>
+      </motion.div>
+
+      {/* ─── Animated Heart ──────────────────────── */}
+      <motion.div
+        className="flex justify-center pt-1"
         animate={{ y: [0, -4, 0] }}
         transition={{ duration: 1.5, repeat: Infinity }}
       >
-        <Heart className="w-6 h-6 text-primary" />
+        <Heart className="w-5 h-5 text-primary" />
       </motion.div>
     </motion.div>
   )
@@ -1288,7 +1536,11 @@ interface ExerciseState {
 
 const WORKOUT_PROGRESS_KEY = 'workout-progress'
 
-export default function WorkoutView() {
+interface WorkoutViewProps {
+  setActiveTab?: (tab: string) => void
+}
+
+export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
   const queryClient = useQueryClient()
   const [workout, setWorkout] = useState<ApiWorkoutResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1623,10 +1875,14 @@ export default function WorkoutView() {
   if (!workout) return null
 
   // Completion screen
-  if (workoutComplete) {
+  if (workoutComplete && workout) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <CompletionScreen />
+        <CompletionScreen
+          workout={workout}
+          exerciseStates={exerciseStates}
+          onBackToHome={() => setActiveTab?.('dashboard')}
+        />
       </div>
     )
   }
