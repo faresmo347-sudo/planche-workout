@@ -35,26 +35,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate weekNumber if not provided
+    // Get user profile for session-based week calculation
+    const profile = await db.userProfile.findUnique({
+      where: { id: 'default-user' },
+    });
+
+    // Calculate weekNumber based on completed sessions (1 week = 7 sessions)
     let calculatedWeekNumber = weekNumber;
-    if (!calculatedWeekNumber) {
-      const profile = await db.userProfile.findUnique({
-        where: { id: 'default-user' },
-      });
-      if (profile) {
-        const startDate = new Date(profile.startDate);
-        const sessionDate = new Date(date);
-        calculatedWeekNumber =
-          Math.floor(
-            (sessionDate.getTime() - startDate.getTime()) /
-              (7 * 24 * 60 * 60 * 1000)
-          ) + 1;
-      } else {
-        calculatedWeekNumber = 1;
-      }
+    if (!calculatedWeekNumber && profile) {
+      calculatedWeekNumber = Math.floor(profile.completedSessions / 7) + 1;
+    } else if (!calculatedWeekNumber) {
+      calculatedWeekNumber = 1;
     }
 
-    // Calculate isDeload if not provided
+    // Calculate isDeload if not provided (deload every 4th week = every 28th session)
     const calculatedIsDeload = isDeload ?? calculatedWeekNumber % 4 === 0;
 
     // Create the workout session
@@ -88,6 +82,12 @@ export async function POST(request: NextRequest) {
           },
         },
       },
+    });
+
+    // Increment completedSessions on user profile
+    await db.userProfile.update({
+      where: { id: 'default-user' },
+      data: { completedSessions: { increment: 1 } },
     });
 
     return NextResponse.json({ session }, { status: 201 });

@@ -42,9 +42,11 @@ interface ExerciseWithStage {
 function formatExercise(
   exercise: ExerciseWithStage,
   isDeload: boolean,
-  maxHoldSeconds?: number | null
+  maxHoldSeconds?: number | null,
+  overloadFactor?: number
 ) {
   const formCues = exercise.formCues ? JSON.parse(exercise.formCues) : [];
+  const factor = overloadFactor ?? 1;
 
   if (exercise.type === 'isometric') {
     let targetSetsMin: number;
@@ -65,6 +67,12 @@ function formatExercise(
       targetHoldMax = exercise.targetHoldMax ?? 10;
       targetSetsMin = exercise.targetSetsMin;
       targetSetsMax = exercise.targetSetsMax;
+    }
+
+    // Apply progressive overload (increase hold times)
+    if (factor > 1) {
+      targetHoldMin = Math.round(targetHoldMin * factor);
+      targetHoldMax = Math.round(targetHoldMax * factor);
     }
 
     if (isDeload) {
@@ -93,6 +101,20 @@ function formatExercise(
     let targetSetsMax = exercise.targetSetsMax;
     let targetRepsMin = exercise.targetRepsMin ?? 5;
     let targetRepsMax = exercise.targetRepsMax ?? 8;
+
+    // Apply progressive overload (increase reps)
+    if (factor > 1) {
+      targetRepsMin = Math.round(targetRepsMin * factor);
+      targetRepsMax = Math.round(targetRepsMax * factor);
+    }
+
+    // Slight sets increase every 2 weeks
+    if (overloadFactor && overloadFactor > 1) {
+      const sessionWeek = Math.round((overloadFactor - 1) / 0.05) + 1;
+      if (sessionWeek % 2 === 0) {
+        targetSetsMax = targetSetsMax + 1;
+      }
+    }
 
     if (isDeload) {
       targetSetsMin = Math.max(1, Math.round(targetSetsMin * 0.5));
@@ -131,74 +153,120 @@ export async function GET() {
       );
     }
 
-    // Determine day of week and workout type
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, ...
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    type DayType = 'planche_focus' | 'fl_focus' | 'rest';
+    // Determine workout type based on completed sessions
+    // Sessions 1,3,5 → planche_focus; Sessions 2,4,6 → fl_focus; Session 7 → combined
+    // After 7 sessions = 1 week, pattern repeats
+    const sessionInWeek = profile.completedSessions % 7; // 0-6
+    type DayType = 'planche_focus' | 'fl_focus' | 'combined';
     let dayType: DayType;
     let focusSkill: string | null = null;
     let focusStageNum: number | null = null;
 
-    switch (dayOfWeek) {
-      case 1: // Monday
-        dayType = 'planche_focus';
-        focusSkill = 'planche';
-        focusStageNum = profile.plancheStage;
-        break;
-      case 2: // Tuesday
-        dayType = 'fl_focus';
-        focusSkill = 'front_lever';
-        focusStageNum = profile.flStage;
-        break;
-      case 3: // Wednesday
-        dayType = 'rest';
-        break;
-      case 4: // Thursday
-        dayType = 'planche_focus';
-        focusSkill = 'planche';
-        focusStageNum = profile.plancheStage;
-        break;
-      case 5: // Friday
-        dayType = 'fl_focus';
-        focusSkill = 'front_lever';
-        focusStageNum = profile.flStage;
-        break;
-      default:
-        // Saturday & Sunday
-        dayType = 'rest';
-        break;
+    if (sessionInWeek === 6) {
+      // 7th session in the week: combined (both skills)
+      dayType = 'combined';
+    } else if (sessionInWeek % 2 === 0) {
+      // Sessions 1,3,5 (0,2,4 in 0-indexed) → planche
+      dayType = 'planche_focus';
+      focusSkill = 'planche';
+      focusStageNum = profile.plancheStage;
+    } else {
+      // Sessions 2,4,6 (1,3,5 in 0-indexed) → fl
+      dayType = 'fl_focus';
+      focusSkill = 'front_lever';
+      focusStageNum = profile.flStage;
     }
 
-    // Calculate week number and deload
-    const startDate = new Date(profile.startDate);
-    const weekNumber =
-      Math.floor(
-        (now.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
-      ) + 1;
+    // Calculate week number and deload based on completed sessions
+    const weekNumber = Math.floor(profile.completedSessions / 7) + 1;
     const isDeload = weekNumber % 4 === 0;
 
-    // If rest day, return early
-    if (dayType === 'rest') {
-      return NextResponse.json({
+    // Calculate progressive overload factor (5% increase per week)
+    const overloadFactor = 1 + (weekNumber - 1) * 0.05;
+
+    // Get current day name for display
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    // If combined day, get both skills' exercises
+    if (dayType === 'combined') {
+      const plancheSkill = await db.skill.findUnique({
+        where: { name: 'planche' },
+        include: {
+          stages: {
+            where: { stageNumber: profile.plancheStage },
+            include: {
+              exercises: {
+                where: { category: 'skill' },
+                orderBy: { progressionOrder: 'asc' },
+              },
+            },
+          },
+        },
+      });
+
+      const flSkill = await db.skill.findUnique({
+        where: { name: 'front_lever' },
+        include: {
+          stages: {
+            where: { stageNumber: profile.flStage },
+            include: {
+              exercises: {
+                where: { category: 'skill' },
+                orderBy: { progressionOrder: 'asc' },
+              },
+            },
+          },
+        },
+      });
+
+      // Get max holds for isometric exercises
+      const maxHolds = await db.maxHold.findMany();
+      const maxHoldMap = new Map<string, number>();
+      for (const mh of maxHolds) {
+        maxHoldMap.set(mh.exerciseName, mh.maxHoldSeconds);
+      }
+
+      // Get warmup and cooldown exercises
+      const warmupExercises = await db.exercise.findMany({
+        where: { category: 'warmup' },
+        orderBy: { progressionOrder: 'asc' },
+      });
+
+      const cooldownExercises = await db.exercise.findMany({
+        where: { category: 'cooldown' },
+        orderBy: { progressionOrder: 'asc' },
+      });
+
+      // Combine skill exercises from both planche and FL
+      const plancheSkillExercises = (plancheSkill?.stages[0]?.exercises ?? []) as ExerciseWithStage[];
+      const flSkillExercises = (flSkill?.stages[0]?.exercises ?? []) as ExerciseWithStage[];
+
+      const formatWithMaxHold = (ex: ExerciseWithStage) => {
+        const maxHold = maxHoldMap.get(ex.name);
+        return formatExercise(ex, isDeload, maxHold, overloadFactor);
+      };
+
+      const workout = {
         date: now.toISOString(),
         dayName: dayNames[dayOfWeek],
         dayType,
         weekNumber,
         isDeload,
+        focusSkill: 'combined',
+        focusStage: null,
+        stageName: `${plancheSkill?.stages[0]?.name ?? 'Planche'} + ${flSkill?.stages[0]?.name ?? 'FL'}`,
         sections: {
-          warmup: [],
-          skill: [],
+          warmup: warmupExercises.map((ex) => formatExercise(ex, isDeload, undefined, overloadFactor)),
+          skill: [...plancheSkillExercises, ...flSkillExercises].map((ex) => formatWithMaxHold(ex)),
           accessory: [],
           core: [],
-          cooldown: [],
+          cooldown: cooldownExercises.map((ex) => formatExercise(ex, isDeload, undefined, overloadFactor)),
         },
-        message:
-          dayOfWeek === 3
-            ? 'Active recovery day — light stretching and mobility recommended'
-            : 'Rest day — focus on recovery',
-      });
+      };
+
+      return NextResponse.json(workout);
     }
 
     // Get the focus skill
@@ -257,7 +325,7 @@ export async function GET() {
     // Format exercises
     const formatWithMaxHold = (ex: ExerciseWithStage) => {
       const maxHold = maxHoldMap.get(ex.name);
-      return formatExercise(ex, isDeload, maxHold);
+      return formatExercise(ex, isDeload, maxHold, overloadFactor);
     };
 
     const workout = {
@@ -270,11 +338,11 @@ export async function GET() {
       focusStage: focusStageNum,
       stageName: stage.name,
       sections: {
-        warmup: warmupExercises.map((ex) => formatExercise(ex, isDeload)),
+        warmup: warmupExercises.map((ex) => formatExercise(ex, isDeload, undefined, overloadFactor)),
         skill: skillExercises.map((ex) => formatWithMaxHold(ex as ExerciseWithStage)),
         accessory: accessoryExercises.map((ex) => formatWithMaxHold(ex as ExerciseWithStage)),
         core: coreExercises.map((ex) => formatWithMaxHold(ex as ExerciseWithStage)),
-        cooldown: cooldownExercises.map((ex) => formatExercise(ex, isDeload)),
+        cooldown: cooldownExercises.map((ex) => formatExercise(ex, isDeload, undefined, overloadFactor)),
       },
     };
 

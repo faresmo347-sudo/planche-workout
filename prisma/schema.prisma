@@ -8,18 +8,19 @@ datasource db {
 }
 
 model UserProfile {
-  id            String   @id @default(cuid())
-  age           Int      @default(16)
-  heightCm      Int      @default(175)
-  weightKg      Float    @default(70)
-  pullUpsMax    Int      @default(15)
-  muscleUpsMax  Int      @default(3)
-  pushUpsMax    Int      @default(48)
-  plancheStage  Int      @default(1)
-  flStage       Int      @default(1)
-  startDate     DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  age              Int      @default(16)
+  heightCm         Int      @default(175)
+  weightKg         Float    @default(70)
+  pullUpsMax       Int      @default(15)
+  muscleUpsMax     Int      @default(3)
+  pushUpsMax       Int      @default(48)
+  plancheStage     Int      @default(1)
+  flStage          Int      @default(1)
+  startDate        DateTime @default(now())
+  completedSessions Int     @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Skill {

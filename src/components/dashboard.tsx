@@ -104,6 +104,8 @@ function getDayTypeLabel(dayType: string): string {
       return 'Planche Focus'
     case 'fl_focus':
       return 'FL Focus'
+    case 'combined':
+      return 'Combined'
     case 'rest':
       return 'Rest Day'
     default:
@@ -277,7 +279,8 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
         const savedRaw = localStorage.getItem('workout-progress')
         if (savedRaw) {
           const saved = JSON.parse(savedRaw)
-          const today = new Date().toISOString().split('T')[0]
+          const now = new Date()
+          const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
           return saved.date === today
         }
       } catch {
@@ -587,8 +590,7 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">
-                {stats?.thisWeekSessions ?? 0} training day
-                {(stats?.thisWeekSessions ?? 0) !== 1 ? 's' : ''} this week
+                {stats?.thisWeekSessions ?? 0}/7 sessions this week
               </p>
               <p className="text-xs text-muted-foreground">
                 {stats?.weekNumber != null
@@ -597,7 +599,7 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
               </p>
             </div>
             <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5].map((day) => {
+              {[1, 2, 3, 4, 5, 6, 7].map((day) => {
                 const isCompleted = day <= (stats?.thisWeekSessions ?? 0)
                 return (
                   <div

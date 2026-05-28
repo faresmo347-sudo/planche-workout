@@ -28,33 +28,11 @@ export async function GET() {
       mh.exerciseName.toLowerCase().includes('tuck front lever')
     );
 
-    // This week's training days
-    const startDate = new Date(profile.startDate);
-    const now = new Date();
-    const weekNumber =
-      Math.floor(
-        (now.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
-      ) + 1;
+    // Session-based week number (1 week = 7 completed sessions)
+    const weekNumber = Math.floor(profile.completedSessions / 7) + 1;
 
-    // Get the start of this week (Monday)
-    const dayOfWeek = now.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() + mondayOffset);
-    weekStart.setHours(0, 0, 0, 0);
-
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 7);
-
-    const thisWeekSessions = await db.workoutSession.count({
-      where: {
-        completed: true,
-        date: {
-          gte: weekStart,
-          lt: weekEnd,
-        },
-      },
-    });
+    // Sessions completed in current week (out of 7)
+    const thisWeekSessions = profile.completedSessions % 7;
 
     return NextResponse.json({
       totalWorkouts,

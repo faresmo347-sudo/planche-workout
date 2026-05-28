@@ -128,7 +128,7 @@ export interface ApiWorkoutSections {
 export interface ApiWorkoutResponse {
   date: string
   dayName: string
-  dayType: 'planche_focus' | 'fl_focus' | 'rest'
+  dayType: 'planche_focus' | 'fl_focus' | 'combined' | 'rest'
   weekNumber: number
   isDeload: boolean
   focusSkill?: string | null

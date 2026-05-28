@@ -56,13 +56,15 @@ const SECTION_ICONS: Record<keyof ApiWorkoutSections, string> = {
 const DAY_TYPE_LABELS: Record<string, string> = {
   planche_focus: 'Planche Focus',
   fl_focus: 'FL Focus',
+  combined: 'Combined',
   rest: 'Rest Day',
 }
 
 // ─── Helper: get today's date as YYYY-MM-DD ────────────────────────────────
 
 function getTodayString(): string {
-  return new Date().toISOString().split('T')[0]
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
 }
 
 // ─── Helper: format seconds as MM:SS ────────────────────────────────────────
@@ -1667,6 +1669,13 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
     )
   }, [allExercisesWithSection, exerciseStates])
 
+  // Check if user has logged at least 1 set (for enabling Complete Workout button)
+  const hasLoggedAnySet = React.useMemo(() => {
+    return Object.values(exerciseStates).some(
+      (state) => state.completedSets > 0
+    )
+  }, [exerciseStates])
+
   // Navigate to next exercise
   const navigateToNextExercise = useCallback(() => {
     if (!workout) return
@@ -1711,6 +1720,9 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
     }
   }, [workout, currentSectionIndex, currentExerciseIndex, currentSectionKey])
 
+  // Ref to track exercise completion for auto-navigation without stale closure
+  const exerciseJustCompletedRef = useRef<string | null>(null)
+
   // Handle logging a set
   const handleLogSet = useCallback(
     (exerciseId: string, data: Record<string, unknown>) => {
@@ -1745,6 +1757,11 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
         const newCompletedSets = current.completedSets + 1
         const isNowComplete = newCompletedSets >= totalSets
 
+        // Set ref for auto-navigation (avoids stale closure)
+        if (isNowComplete) {
+          exerciseJustCompletedRef.current = exerciseId
+        }
+
         return {
           ...prev,
           [exerciseId]: {
@@ -1755,16 +1772,19 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
           },
         }
       })
-
-      // Auto-navigate to next exercise if this one is complete
-      const current = exerciseStates[exerciseId]
-      if (current && current.completedSets + 1 >= totalSets) {
-        // Delay navigation slightly for visual feedback
-        setTimeout(() => navigateToNextExercise(), 500)
-      }
     },
-    [workout, allExercisesWithSection, exerciseStates, navigateToNextExercise]
+    [workout, allExercisesWithSection]
   )
+
+  // Effect to handle auto-navigation when an exercise is completed
+  useEffect(() => {
+    if (exerciseJustCompletedRef.current) {
+      const id = exerciseJustCompletedRef.current
+      exerciseJustCompletedRef.current = null
+      // Delay navigation slightly for visual feedback
+      setTimeout(() => navigateToNextExercise(), 500)
+    }
+  }, [exerciseStates, navigateToNextExercise])
 
   // Handle Complete Workout
   const handleCompleteWorkout = useCallback(async () => {
@@ -1848,7 +1868,8 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
     )
   }
 
-  // Rest day
+  // Rest day - no longer used since we switched to session-based workouts,
+  // but keep for backward compatibility just in case
   if (workout?.dayType === 'rest') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
@@ -2114,7 +2135,7 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
         <div className="max-w-lg mx-auto">
           <Button
             onClick={handleCompleteWorkout}
-            disabled={!allExercisesComplete || submitting}
+            disabled={!hasLoggedAnySet || submitting}
             className="w-full min-h-[52px] rounded-xl text-base font-medium"
             size="lg"
           >

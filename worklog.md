@@ -53,3 +53,30 @@ Stage Summary:
 - Modified: src/app/page.tsx (passed setActiveTab to WorkoutView)
 - Lint passes cleanly, dev server compiles successfully
 
+---
+Task ID: 1-6
+Agent: full-stack-developer
+Task: Fix workout logging, persistence, session-based weeks, progressive overload
+
+Work Log:
+- Read all relevant files: prisma/schema.prisma, workout/log/route.ts, workout/today/route.ts, dashboard/stats/route.ts, workout-view.tsx, dashboard.tsx, types.ts
+- Added `completedSessions Int @default(0)` to UserProfile in Prisma schema
+- Ran `bun run db:push` to update database
+- Updated /api/workout/log/route.ts: replaced calendar-based week calculation with session-based (Math.floor(completedSessions/7)+1), added increment of completedSessions after workout creation
+- Updated /api/workout/today/route.ts: replaced day-of-week workout type with session-based (sessions 1,3,5→planche, 2,4,6→FL, 7→combined), added progressive overload factor (5% per week) applied to hold times and reps, added combined day type that fetches both skills
+- Updated /api/dashboard/stats/route.ts: replaced calendar-based week/sessions with session-based (completedSessions % 7 for this week, Math.floor(completedSessions/7)+1 for week number)
+- Fixed workout-view.tsx: replaced UTC-based getTodayString() with local date format, fixed stale closure in handleLogSet by using a ref (exerciseJustCompletedRef) for auto-navigation, changed Complete Workout button to enable when hasLoggedAnySet (at least 1 set logged) instead of requiring allExercisesComplete, added 'combined' to DAY_TYPE_LABELS
+- Fixed dashboard.tsx: updated localStorage date check to use local date, changed weekly training display from "X training days" to "X/7 sessions", updated dots from 5 to 7, added 'combined' case to getDayTypeLabel
+- Updated types.ts: added 'combined' to dayType union type
+- Ran lint (passes), build (succeeds)
+
+Stage Summary:
+- Session-based weeks: 1 week = 7 completed workout sessions (not calendar days)
+- Progressive overload: 5% increase per week on hold times and reps, +1 set every 2 weeks for dynamic exercises
+- Workout type alternates: planche (sessions 1,3,5), FL (sessions 2,4,6), combined (session 7)
+- Deload every 4th week (every 28th session)
+- Complete Workout button now available after logging just 1 set (not requiring all exercises)
+- localStorage persistence uses local date (fixes timezone bug)
+- Auto-navigation on exercise completion uses ref to avoid stale closure
+- All changes lint-clean and build-clean
+
