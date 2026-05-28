@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play, Pause, RotateCcw, Check, Plus, Minus, Info,
@@ -56,6 +57,12 @@ const DAY_TYPE_LABELS: Record<string, string> = {
   planche_focus: 'Planche Focus',
   fl_focus: 'FL Focus',
   rest: 'Rest Day',
+}
+
+// ─── Helper: get today's date as YYYY-MM-DD ────────────────────────────────
+
+function getTodayString(): string {
+  return new Date().toISOString().split('T')[0]
 }
 
 // ─── Helper: format seconds as MM:SS ────────────────────────────────────────
@@ -1279,7 +1286,10 @@ interface ExerciseState {
   sets: SetLog[]
 }
 
+const WORKOUT_PROGRESS_KEY = 'workout-progress'
+
 export default function WorkoutView() {
+  const queryClient = useQueryClient()
   const [workout, setWorkout] = useState<ApiWorkoutResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1311,6 +1321,39 @@ export default function WorkoutView() {
             }
           }
         }
+
+        // Restore from localStorage if available and valid
+        try {
+          const savedRaw = localStorage.getItem(WORKOUT_PROGRESS_KEY)
+          if (savedRaw) {
+            const saved = JSON.parse(savedRaw) as {
+              date: string
+              dayType: string
+              exerciseStates: Record<string, ExerciseState>
+              currentSectionIndex: number
+              currentExerciseIndex: number
+            }
+            const today = getTodayString()
+            // Only restore if date matches today and dayType matches
+            if (saved.date === today && saved.dayType === data.dayType) {
+              // Merge saved states into initialized states
+              for (const exId of Object.keys(saved.exerciseStates)) {
+                if (exId in states) {
+                  states[exId] = saved.exerciseStates[exId]
+                }
+              }
+              setCurrentSectionIndex(saved.currentSectionIndex)
+              setCurrentExerciseIndex(saved.currentExerciseIndex)
+            } else {
+              // Stale data — clear it
+              localStorage.removeItem(WORKOUT_PROGRESS_KEY)
+            }
+          }
+        } catch {
+          // If localStorage parsing fails, just start fresh
+          localStorage.removeItem(WORKOUT_PROGRESS_KEY)
+        }
+
         setExerciseStates(states)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load workout')
@@ -1320,6 +1363,20 @@ export default function WorkoutView() {
     }
     fetchData()
   }, [])
+
+  // Persist exercise states and navigation to localStorage
+  useEffect(() => {
+    if (!workout || Object.keys(exerciseStates).length === 0) return
+
+    const data = {
+      date: getTodayString(),
+      dayType: workout.dayType,
+      exerciseStates,
+      currentSectionIndex,
+      currentExerciseIndex,
+    }
+    localStorage.setItem(WORKOUT_PROGRESS_KEY, JSON.stringify(data))
+  }, [exerciseStates, currentSectionIndex, currentExerciseIndex, workout])
 
   // Get all exercises as a flat list with section info
   const allExercisesWithSection = React.useMemo(() => {
@@ -1488,13 +1545,24 @@ export default function WorkoutView() {
 
       if (!response.ok) throw new Error('Failed to log workout')
 
+      // Clear saved progress from localStorage
+      localStorage.removeItem(WORKOUT_PROGRESS_KEY)
+
+      // Invalidate React Query caches so dashboard/progress views refresh
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['workout-today'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['workout-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['progress'] }),
+      ])
+
       setWorkoutComplete(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save workout')
     } finally {
       setSubmitting(false)
     }
-  }, [workout, exerciseStates])
+  }, [workout, exerciseStates, queryClient])
 
   // Loading state
   if (loading) {

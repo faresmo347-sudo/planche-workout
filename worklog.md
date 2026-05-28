@@ -1,25 +1,30 @@
 ---
-Task ID: 1
+Task ID: 1-2
 Agent: Main Agent
-Task: Add Phase Explorer - browse workouts for every training phase
+Task: Add workout persistence + fix workout completion tracking
 
 Work Log:
-- Fixed the `Home` naming conflict in page.tsx (Home icon vs Home function)
-- Explored the full codebase: dashboard, workout-view, progress-view, pain-dialog, API routes, Prisma schema
-- Determined that the `/api/skills` endpoint already returns all stages with exercises, so no new API endpoint was needed
-- Created `src/components/phase-workouts-view.tsx` - a new Phase Explorer component with:
-  - Planche / Front Lever skill selector buttons
-  - Interactive phase timeline (stages 1-4) with current stage highlighting
-  - Detailed stage card showing: goal, exercise count, duration, target hold times
-  - Exercises grouped by category (skill, accessory, core, warmup, cooldown) with type icons
-  - "All Phases at a Glance" summary card
-  - Calm sage-green aesthetic matching the existing app
-  - Framer Motion animations for smooth transitions
-- Updated `src/app/page.tsx` to add "Phases" tab (Layers icon) in the bottom navigation
-- Fixed ESLint errors about creating components during render (changed dynamic icon resolution to conditional rendering)
-- Verified lint passes and dev server compiles successfully
+- Analyzed the full workout-view.tsx component (~1800 lines) to understand exercise state management
+- Analyzed the /api/workout/log API route to understand how sessions are saved
+- Identified that exerciseStates were only in React state (lost on navigation)
+- Identified that React Query caches weren't invalidated after workout completion
+
+Task 1 - Workout Persistence:
+- Added `WORKOUT_PROGRESS_KEY` constant and `getTodayString()` helper
+- Modified the fetch useEffect to restore from localStorage after initializing states
+- Added persistence useEffect that saves exerciseStates, navigation indices, date, and dayType to localStorage on every change
+- Added auto-clear of stale data (different date or dayType)
+- Added localStorage.removeItem() on successful workout completion
+- Graceful error handling for corrupted localStorage data
+
+Task 2 - Fix Completion Tracking:
+- Added `useQueryClient` import from @tanstack/react-query
+- After successful POST to /api/workout/log, invalidate 4 query keys:
+  - workout-today, dashboard-stats, workout-history, progress
+- This causes Dashboard, Progress view etc. to refetch and show updated data
 
 Stage Summary:
-- New file: `src/components/phase-workouts-view.tsx`
-- Modified: `src/app/page.tsx` (added Phases tab + Layers icon import)
-- Feature: Users can now browse all 4 training phases for both Planche and Front Lever, see exercises per phase, and understand the full training roadmap
+- Modified: src/components/workout-view.tsx
+- Lint passes cleanly, dev server compiles successfully
+- Workout progress now survives page navigation and browser refresh
+- Completed workouts now properly update the dashboard stats and progress views
