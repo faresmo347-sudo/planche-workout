@@ -1552,71 +1552,81 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0)
   const [workoutComplete, setWorkoutComplete] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Fetch workout data
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/workout/today')
-        if (!res.ok) throw new Error('Failed to fetch workout')
-        const data: ApiWorkoutResponse = await res.json()
-        setWorkout(data)
+  // Fetch workout data with retry logic
+  const fetchWorkoutData = useCallback(async (retryCount = 0) => {
+    try {
+      setLoading(retryCount === 0)
+      setError(null)
+      const res = await fetch('/api/workout/today')
+      if (!res.ok) throw new Error('Failed to fetch workout')
+      const data: ApiWorkoutResponse = await res.json()
+      setWorkout(data)
 
-        // Initialize exercise states
-        const states: Record<string, ExerciseState> = {}
-        for (const sectionKey of SECTION_ORDER) {
-          const exercises = data.sections[sectionKey]
-          for (const ex of exercises) {
-            states[ex.id] = {
-              currentSet: 1,
-              completedSets: 0,
-              isComplete: false,
-              sets: [],
-            }
+      // Initialize exercise states
+      const states: Record<string, ExerciseState> = {}
+      for (const sectionKey of SECTION_ORDER) {
+        const exercises = data.sections[sectionKey]
+        for (const ex of exercises) {
+          states[ex.id] = {
+            currentSet: 1,
+            completedSets: 0,
+            isComplete: false,
+            sets: [],
           }
         }
-
-        // Restore from localStorage if available and valid
-        try {
-          const savedRaw = localStorage.getItem(WORKOUT_PROGRESS_KEY)
-          if (savedRaw) {
-            const saved = JSON.parse(savedRaw) as {
-              date: string
-              dayType: string
-              exerciseStates: Record<string, ExerciseState>
-              currentSectionIndex: number
-              currentExerciseIndex: number
-            }
-            const today = getTodayString()
-            // Only restore if date matches today and dayType matches
-            if (saved.date === today && saved.dayType === data.dayType) {
-              // Merge saved states into initialized states
-              for (const exId of Object.keys(saved.exerciseStates)) {
-                if (exId in states) {
-                  states[exId] = saved.exerciseStates[exId]
-                }
-              }
-              setCurrentSectionIndex(saved.currentSectionIndex)
-              setCurrentExerciseIndex(saved.currentExerciseIndex)
-            } else {
-              // Stale data — clear it
-              localStorage.removeItem(WORKOUT_PROGRESS_KEY)
-            }
-          }
-        } catch {
-          // If localStorage parsing fails, just start fresh
-          localStorage.removeItem(WORKOUT_PROGRESS_KEY)
-        }
-
-        setExerciseStates(states)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load workout')
-      } finally {
-        setLoading(false)
       }
+
+      // Restore from localStorage if available and valid
+      try {
+        const savedRaw = localStorage.getItem(WORKOUT_PROGRESS_KEY)
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw) as {
+            date: string
+            dayType: string
+            exerciseStates: Record<string, ExerciseState>
+            currentSectionIndex: number
+            currentExerciseIndex: number
+          }
+          const today = getTodayString()
+          // Only restore if date matches today and dayType matches
+          if (saved.date === today && saved.dayType === data.dayType) {
+            // Merge saved states into initialized states
+            for (const exId of Object.keys(saved.exerciseStates)) {
+              if (exId in states) {
+                states[exId] = saved.exerciseStates[exId]
+              }
+            }
+            setCurrentSectionIndex(saved.currentSectionIndex)
+            setCurrentExerciseIndex(saved.currentExerciseIndex)
+          } else {
+            // Stale data — clear it
+            localStorage.removeItem(WORKOUT_PROGRESS_KEY)
+          }
+        }
+      } catch {
+        // If localStorage parsing fails, just start fresh
+        localStorage.removeItem(WORKOUT_PROGRESS_KEY)
+      }
+
+      setExerciseStates(states)
+    } catch (err) {
+      // Auto-retry up to 2 times with 1s delay
+      if (retryCount < 2) {
+        setTimeout(() => fetchWorkoutData(retryCount + 1), 1000)
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load workout')
+      }
+    } finally {
+      setLoading(false)
     }
-    fetchData()
   }, [])
+
+  // Fetch workout on mount
+  useEffect(() => {
+    fetchWorkoutData()
+  }, [fetchWorkoutData])
 
   // Persist exercise states and navigation to localStorage
   useEffect(() => {
@@ -1791,6 +1801,7 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
     if (!workout) return
 
     setSubmitting(true)
+    setSaveError(null)
     try {
       // Flatten all logged sets
       const allLoggedSets: SetLog[] = []
@@ -1830,7 +1841,8 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
 
       setWorkoutComplete(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save workout')
+      // Don't use setError here — that would wipe the workout view
+      setSaveError(err instanceof Error ? err.message : 'Failed to save workout. Your data is saved locally — try again.')
     } finally {
       setSubmitting(false)
     }
@@ -1860,7 +1872,8 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
           <AlertCircle className="w-10 h-10 text-destructive mx-auto mb-3" />
           <h3 className="font-semibold text-lg mb-2">Something went wrong</h3>
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()} className="min-h-[44px]">
+          <Button onClick={() => fetchWorkoutData(0)} className="min-h-[44px]">
+            <RotateCcw className="w-4 h-4 mr-2" />
             Try Again
           </Button>
         </Card>
@@ -2133,6 +2146,12 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
       {/* ─── Complete Workout Button (sticky footer) ─────────────── */}
       <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-lg border-t border-border/50 p-4 z-40">
         <div className="max-w-lg mx-auto">
+          {saveError && (
+            <div className="flex items-center gap-2 text-xs text-destructive mb-2 px-1">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
           <Button
             onClick={handleCompleteWorkout}
             disabled={!hasLoggedAnySet || submitting}

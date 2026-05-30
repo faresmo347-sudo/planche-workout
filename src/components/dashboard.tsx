@@ -218,10 +218,28 @@ function SkillProgressCard({
   if (!skill || !stage) {
     return (
       <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-        <CardContent className="p-5">
+        <CardHeader className="pb-2 px-5 pt-5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10">
+              <Icon className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <CardTitle className="text-base">
+                {skill?.label ?? (stageNumber === 1 ? 'Planche' : 'Front Lever')}
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Stage {stageNumber}
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-5 pb-5">
           <p className="text-sm text-muted-foreground">
-            No stage data available
+            Loading stage data...
           </p>
+          <div className="space-y-1.5 mt-3">
+            <div className="h-2 bg-muted rounded-full animate-pulse w-full" />
+          </div>
         </CardContent>
       </Card>
     )
@@ -296,24 +314,33 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
   const profileQuery = useQuery({
     queryKey: ['profile'],
     queryFn: fetchProfile,
+    retry: 2,
+    placeholderData: (prev) => prev,
   })
   const skillsQuery = useQuery({
     queryKey: ['skills'],
     queryFn: fetchSkills,
+    retry: 2,
+    placeholderData: (prev) => prev,
   })
   const workoutQuery = useQuery({
     queryKey: ['workout-today'],
     queryFn: fetchWorkoutToday,
+    retry: 2,
+    placeholderData: (prev) => prev,
   })
   const statsQuery = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
+    retry: 2,
+    placeholderData: (prev) => prev,
   })
 
   const profile = profileQuery.data
   const skills = skillsQuery.data ?? []
   const workout = workoutQuery.data
   const stats = statsQuery.data
+  const statsError = statsQuery.isError && !statsQuery.data
 
   const plancheSkill = skills.find((s) => s.name === 'planche')
   const flSkill = skills.find((s) => s.name === 'front_lever')
@@ -336,6 +363,8 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
     profileQuery.isLoading ||
     skillsQuery.isLoading ||
     workoutQuery.isLoading
+
+  const workoutError = workoutQuery.isError && !workoutQuery.data
 
   /* ---- render ---- */
   return (
@@ -461,6 +490,27 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
                 <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
               </div>
+            ) : workoutError ? (
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-3">
+                  <Dumbbell className="w-7 h-7 text-primary" />
+                </div>
+                <p className="text-sm font-medium text-foreground mb-1">
+                  Unable to load workout
+                </p>
+                <p className="text-xs text-muted-foreground max-w-[240px] leading-relaxed mb-4">
+                  Something went wrong. Try refreshing or start a fresh session.
+                </p>
+                <Button
+                  onClick={() => workoutQuery.refetch()}
+                  variant="outline"
+                  className="rounded-xl min-h-[40px]"
+                  size="sm"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                  Try Again
+                </Button>
+              </div>
             ) : isRestDay ? (
               <div className="flex flex-col items-center py-6 text-center">
                 <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-3">
@@ -537,7 +587,7 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <TrendingUp className="w-4 h-4 text-primary" />
               </div>
               <span className="text-xl font-semibold leading-none">
-                {stats?.totalWorkouts ?? 0}
+                {statsError ? '—' : (stats?.totalWorkouts ?? 0)}
               </span>
               <span className="text-[11px] text-muted-foreground mt-1">
                 Workouts
@@ -552,9 +602,9 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <CircleDot className="w-4 h-4 text-primary" />
               </div>
               <span className="text-xl font-semibold leading-none">
-                {stats?.plancheMaxHold != null
+                {statsError ? '—' : (stats?.plancheMaxHold != null
                   ? `${Math.round(stats.plancheMaxHold)}s`
-                  : '—'}
+                  : '—')}
               </span>
               <span className="text-[11px] text-muted-foreground mt-1">
                 Planche
@@ -569,9 +619,9 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <GripHorizontal className="w-4 h-4 text-primary" />
               </div>
               <span className="text-xl font-semibold leading-none">
-                {stats?.flMaxHold != null
+                {statsError ? '—' : (stats?.flMaxHold != null
                   ? `${Math.round(stats.flMaxHold)}s`
-                  : '—'}
+                  : '—')}
               </span>
               <span className="text-[11px] text-muted-foreground mt-1">
                 Front Lever
@@ -590,12 +640,14 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">
-                {stats?.thisWeekSessions ?? 0}/7 sessions this week
+                {statsError ? '— sessions this week' : `${stats?.thisWeekSessions ?? 0}/7 sessions this week`}
               </p>
               <p className="text-xs text-muted-foreground">
-                {stats?.weekNumber != null
-                  ? `Program week ${stats.weekNumber}`
-                  : 'Loading...'}
+                {statsError
+                  ? 'Unable to load stats'
+                  : stats?.weekNumber != null
+                    ? `Program week ${stats.weekNumber}`
+                    : 'Loading...'}
               </p>
             </div>
             <div className="flex items-center gap-0.5">

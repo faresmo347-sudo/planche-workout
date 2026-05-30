@@ -536,14 +536,18 @@ function SkillPhaseBrowser({
 /* ------------------------------------------------------------------ */
 
 export default function PhaseWorkoutsView() {
-  const { data: skills, isLoading: skillsLoading } = useQuery({
+  const { data: skills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useQuery({
     queryKey: ['skills'],
     queryFn: fetchSkills,
+    retry: 2,
+    placeholderData: (prev) => prev,
   })
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading, isError: profileError, refetch: refetchProfile } = useQuery({
     queryKey: ['profile'],
     queryFn: fetchProfile,
+    retry: 2,
+    placeholderData: (prev) => prev,
   })
 
   const [activeSkill, setActiveSkill] = useState<'planche' | 'front_lever'>('planche')
@@ -566,6 +570,28 @@ export default function PhaseWorkoutsView() {
         <div className="h-10 bg-muted rounded-xl animate-pulse" />
         <div className="h-16 bg-muted rounded-2xl animate-pulse" />
         <div className="h-72 bg-muted rounded-2xl animate-pulse" />
+      </div>
+    )
+  }
+
+  if (!currentSkill && (skillsError || profileError)) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Card className="rounded-2xl shadow-sm max-w-sm w-full">
+          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+            <Layers className="w-12 h-12 text-muted-foreground/30 mb-4" />
+            <p className="text-sm text-muted-foreground mb-1">Failed to load skill data</p>
+            <p className="text-xs text-muted-foreground mb-4">Something went wrong. Please try again.</p>
+            <Button
+              onClick={() => { refetchSkills(); refetchProfile(); }}
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
