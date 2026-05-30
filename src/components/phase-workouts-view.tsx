@@ -1,6 +1,6 @@
 'use client'
 
-import { SKILLS, getProfile } from '@/lib/client-data'
+import { SKILLS, getProfile, computeCurrentStage } from '@/lib/client-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import {
@@ -526,8 +526,8 @@ export default function PhaseWorkoutsView() {
   const profile = getProfile()
   const currentStageNum =
     activeSkill === 'planche'
-      ? profile.plancheStage
-      : profile.flStage
+      ? computeCurrentStage('planche')
+      : computeCurrentStage('front_lever')
 
   if (!currentSkill) {
     return (

@@ -1,6 +1,6 @@
 'use client'
 
-import { SKILLS, getProfile, getProgressData, getMaxHolds, getWorkoutHistory } from '@/lib/client-data'
+import { SKILLS, getProfile, getProgressData, getMaxHolds, getWorkoutHistory, getStageProgressByWorkouts, computeCurrentStage } from '@/lib/client-data'
 import { motion } from 'framer-motion'
 import {
   TrendingUp,
@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Circle,
   Award,
-  Clock,
   BarChart3,
   ChevronDown,
   ChevronRight,
@@ -240,19 +239,21 @@ function SkillStageCard({
   icon: Icon,
   stageInfo,
   stages,
-  monthsElapsed,
   index,
 }: {
-  skillName: string
+  skillName: 'planche' | 'front_lever'
   skillLabel: string
   icon: React.ElementType
   stageInfo: NonNullable<ProgressApiResponse['stageProgress']['planche']>
   stages: SkillData['stages']
-  monthsElapsed: number
   index: number
 }) {
-  const monthsRemaining = Math.max(0, stageInfo.endMonth - monthsElapsed)
+  const stageProgress = getStageProgressByWorkouts(skillName)
+  const currentStageData = stages.find((s) => s.stageNumber === stageProgress.currentStage)
+  const nextStageData = stages.find((s) => s.stageNumber === stageProgress.currentStage + 1)
+  const isMaxStage = !nextStageData
   const stageNames = stages.map((s) => s.name)
+  const workoutsRemaining = isMaxStage ? 0 : stageProgress.workoutsNeeded - stageProgress.workoutsInStage
 
   return (
     <motion.div
@@ -276,7 +277,7 @@ function SkillStageCard({
               </div>
             </div>
             <Badge variant="secondary" className="text-xs font-medium">
-              {stageInfo.progressInStage}%
+              {stageProgress.percentComplete}%
             </Badge>
           </div>
         </CardHeader>
@@ -299,22 +300,28 @@ function SkillStageCard({
           {/* Progress bar */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Stage progress</span>
-              <span className="font-medium text-foreground">{stageInfo.progressInStage}%</span>
+              <span>
+                {isMaxStage
+                  ? 'Stage mastered!'
+                  : `${stageProgress.workoutsInStage}/${stageProgress.workoutsNeeded} workouts to next stage`}
+              </span>
+              <span className="font-medium text-foreground">{stageProgress.percentComplete}%</span>
             </div>
-            <Progress value={stageInfo.progressInStage} className="h-2.5 rounded-full" />
+            <Progress value={stageProgress.percentComplete} className="h-2.5 rounded-full" />
           </div>
 
-          {/* Time info */}
+          {/* Workout info */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="w-3.5 h-3.5" />
-              <span>{monthsElapsed} months in</span>
+              <Dumbbell className="w-3.5 h-3.5" />
+              <span>{stageProgress.workoutsInStage} workouts done</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>~{monthsRemaining} months remaining</span>
-            </div>
+            {!isMaxStage && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{workoutsRemaining} workouts to Stage {stageInfo.stageNumber + 1}</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -841,7 +848,6 @@ export default function ProgressView() {
               icon={Target}
               stageInfo={progressData.stageProgress.planche}
               stages={plancheSkill.stages}
-              monthsElapsed={progressData.stageProgress.monthsElapsed}
               index={0}
             />
           )}
@@ -852,7 +858,6 @@ export default function ProgressView() {
               icon={Award}
               stageInfo={progressData.stageProgress.frontLever}
               stages={flSkill.stages}
-              monthsElapsed={progressData.stageProgress.monthsElapsed}
               index={1}
             />
           )}

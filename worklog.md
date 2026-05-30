@@ -30,3 +30,26 @@ Stage Summary:
 - Progressive overload only increases when a full 7-session week is completed
 - App still works offline with localStorage; server sync is secondary (fire-and-forget)
 - Dashboard shows clear weekly progress indicators with motivational messages
+---
+Task ID: 1
+Agent: main
+Task: Implement workout-based stage transitions and harder exercises per stage
+
+Work Log:
+- Added `workoutsRequired` field to StageData type in types.ts
+- Added `workoutsRequired` to all 8 stages (0, 18, 42, 70 cumulative skill-specific workouts)
+- Made exercises significantly harder in stages 2-4 (more sets, less hold time, less reps, more rest needed)
+- Added `countSkillWorkouts()`, `computeCurrentStage()`, `getStageProgressByWorkouts()` functions
+- Updated `generateWorkoutToday()` to use `computeCurrentStage()` instead of `profile.plancheStage/flStage`
+- Updated `getDashboardStats()` with workout-based stage info
+- Updated `getProgressData()` with workout-based stage progress
+- Updated dashboard SkillProgressCard to show workout-based progress (X/Y workouts to next stage)
+- Updated progress-view SkillStageCard to show workout-based progress
+- Updated phase-workouts-view to use `computeCurrentStage()`
+- Removed unused `getMonthsElapsed`, `getStageProgress` helpers from dashboard
+- Lint passes clean, dev server returns 200
+
+Stage Summary:
+- Stage transitions are now workout-based: 18 skill-specific workouts to reach stage 2, 42 for stage 3, 70 for stage 4
+- Each stage has progressively harder exercises with more sets, tighter rep/hold ranges, and longer rest periods
+- Dashboard and progress views now show "X/Y workouts to next stage" instead of month-based progress

@@ -34,6 +34,11 @@ export interface StageData {
   endMonth: number
   targetHoldMin: number | null
   targetHoldMax: number | null
+  /** How many skill-specific workouts must be completed to advance to the next stage.
+   *  Set to 0 for the first stage of each skill.
+   *  Cumulative: stage 2 might require 18, stage 3 requires 42, etc.
+   */
+  workoutsRequired: number
   exercises: ExerciseData[]
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useSyncExternalStore, useCallback } from 'react'
+import { useSyncExternalStore } from 'react'
 import { motion } from 'framer-motion'
 import {
   Card,
@@ -29,7 +29,6 @@ import {
 } from 'lucide-react'
 import type {
   SkillData,
-  StageData,
   ApiWorkoutResponse,
   ApiExercise,
   ProfileData,
@@ -39,6 +38,7 @@ import {
   getProfile,
   generateWorkoutToday,
   getDashboardStats,
+  getStageProgressByWorkouts,
   saveWorkoutSession,
   type WorkoutSession,
 } from '@/lib/client-data'
@@ -90,22 +90,6 @@ function serverGreetingSubscribe() { return () => {} }
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function getMonthsElapsed(startDate: string): number {
-  const start = new Date(startDate)
-  const now = new Date()
-  return (
-    (now.getFullYear() - start.getFullYear()) * 12 +
-    (now.getMonth() - start.getMonth())
-  )
-}
-
-function getStageProgress(stage: StageData, monthsElapsed: number): number {
-  const duration = stage.endMonth - stage.startMonth
-  if (duration <= 0) return 100
-  const elapsed = monthsElapsed - stage.startMonth
-  return Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)))
-}
 
 function getDayTypeLabel(dayType: string): string {
   switch (dayType) {
@@ -177,16 +161,17 @@ function getCategoryBadgeVariant(
 
 function SkillProgressCard({
   skill,
-  stageNumber,
-  monthsElapsed,
+  skillName,
   icon: Icon,
 }: {
   skill: SkillData | undefined
-  stageNumber: number
-  monthsElapsed: number
+  skillName: 'planche' | 'front_lever'
   icon: React.ElementType
 }) {
-  const stage = skill?.stages.find((s) => s.stageNumber === stageNumber)
+  const stageProgress = getStageProgressByWorkouts(skillName)
+  const stage = skill?.stages.find((s) => s.stageNumber === stageProgress.currentStage)
+  const nextStage = skill?.stages.find((s) => s.stageNumber === stageProgress.currentStage + 1)
+
   if (!skill || !stage) {
     return (
       <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow">
@@ -197,10 +182,10 @@ function SkillProgressCard({
             </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-base">
-                {skill?.label ?? (stageNumber === 1 ? 'Planche' : 'Front Lever')}
+                {skill?.label ?? (skillName === 'planche' ? 'Planche' : 'Front Lever')}
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Stage {stageNumber}
+                Stage {stageProgress.currentStage}
               </CardDescription>
             </div>
           </div>
@@ -217,7 +202,8 @@ function SkillProgressCard({
     )
   }
 
-  const progress = getStageProgress(stage, monthsElapsed)
+  const isMaxStage = !nextStage
+  const progress = stageProgress.percentComplete
 
   return (
     <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-card">
@@ -232,6 +218,12 @@ function SkillProgressCard({
               Stage {stage.stageNumber}: {stage.name}
             </CardDescription>
           </div>
+          {isMaxStage && (
+            <Badge className="bg-primary/10 text-primary border-0 text-[10px]">
+              <Trophy className="w-3 h-3 mr-0.5" />
+              Max
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="px-5 pb-5">
@@ -240,14 +232,18 @@ function SkillProgressCard({
         </p>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Stage progress</span>
+            <span className="text-muted-foreground">
+              {isMaxStage ? 'Stage mastered' : `${stageProgress.workoutsInStage}/${stageProgress.workoutsNeeded} workouts`}
+            </span>
             <span className="font-medium text-primary">{progress}%</span>
           </div>
           <Progress value={progress} className="h-2 rounded-full" />
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>Month {stage.startMonth}</span>
-            <span>Month {stage.endMonth}</span>
-          </div>
+          {!isMaxStage && nextStage && (
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Stage {stage.stageNumber}</span>
+              <span>Stage {nextStage.stageNumber}: {nextStage.name}</span>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -286,8 +282,6 @@ export default function Dashboard({ setActiveTab, onWorkoutLogged }: DashboardPr
 
   const plancheSkill = skills.find((s) => s.name === 'planche')
   const flSkill = skills.find((s) => s.name === 'front_lever')
-
-  const monthsElapsed = profile ? getMonthsElapsed(profile.startDate) : 0
 
   // Hydration-safe greeting
   const { text: greeting, Icon: GreetingIcon } = useSyncExternalStore(
@@ -378,14 +372,12 @@ export default function Dashboard({ setActiveTab, onWorkoutLogged }: DashboardPr
       >
         <SkillProgressCard
           skill={plancheSkill}
-          stageNumber={profile?.plancheStage ?? 1}
-          monthsElapsed={monthsElapsed}
+          skillName="planche"
           icon={CircleDot}
         />
         <SkillProgressCard
           skill={flSkill}
-          stageNumber={profile?.flStage ?? 1}
-          monthsElapsed={monthsElapsed}
+          skillName="front_lever"
           icon={GripHorizontal}
         />
       </motion.div>
