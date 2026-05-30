@@ -80,3 +80,27 @@ Stage Summary:
 - Auto-navigation on exercise completion uses ref to avoid stale closure
 - All changes lint-clean and build-clean
 
+---
+Task ID: 3
+Agent: Main
+Task: Fix "PreconditionFailed: function is pending state" error + make weekly progress only advance on logged workouts
+
+Work Log:
+1. Analyzed user screenshot showing "PreconditionFailed: function is pending state" error
+2. Identified root cause: `output: "standalone"` in next.config.ts was causing dev server instability
+3. Identified secondary cause: `| tee dev.log` pipe in dev script was killing the server process
+4. Removed `output: "standalone"` from next.config.ts
+5. Changed dev script from `next dev -p 3000 2>&1 | tee dev.log` to `next dev -p 3000`
+6. Added `allowedDevOrigins: [".space-z.ai", "localhost", "127.0.0.1"]` to next.config.ts
+7. Updated workout-view.tsx: "Complete Workout" → "Log & Save Workout" with helper text
+8. Updated workout-view.tsx completion screen: "Workout Complete!" → "Workout Logged!", added session counting messaging
+9. Updated workout-view.tsx: added toast notification on successful workout log
+10. Updated dashboard.tsx: "Only logged workouts count" label, "X/7 logged" counter, "unlocks after 7 logged sessions" info
+
+Stage Summary:
+- Fixed dev server crash by removing standalone output mode and tee pipe
+- Added allowedDevOrigins for preview panel access
+- Weekly progress clearly only advances when user clicks "Log & Save Workout"
+- Clear messaging throughout the app about logged workouts counting toward progress
+- Toast notification confirms workout was logged successfully
+
