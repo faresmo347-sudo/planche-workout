@@ -2,7 +2,8 @@
  * Client-side data store — replaces all server-side API routes.
  * All static data (skills, exercises, stages) is hardcoded.
  * All user data (profile, workout sessions, max holds, pain reports)
- * is persisted to localStorage.
+ * is persisted to localStorage and synced to the server for
+ * cross-device persistence.
  */
 
 import type {
@@ -41,6 +42,87 @@ function lsSet<T>(key: string, value: T): void {
     localStorage.setItem(key, JSON.stringify(value))
   } catch {
     // localStorage full or unavailable
+  }
+}
+
+// ─── Server Sync ────────────────────────────────────────────────────────────────
+
+/**
+ * Fire-and-forget POST to /api/sync — sends all localStorage data to the server.
+ * Errors are caught silently so the app works offline.
+ */
+function syncToServer(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const profile = lsGet<ProfileData>(LS_PROFILE, DEFAULT_PROFILE)
+    const sessions = lsGet<WorkoutSession[]>(LS_SESSIONS, [])
+    const maxHolds = lsGet<MaxHoldData[]>(LS_MAX_HOLDS, [])
+    const painReports = lsGet<PainReportData[]>(LS_PAIN_REPORTS, [])
+
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile, sessions, maxHolds, painReports }),
+    }).catch(() => {
+      // Silently ignore sync errors — app works offline
+    })
+  } catch {
+    // Silently ignore
+  }
+}
+
+/**
+ * Initialize data from the server on app mount.
+ * If server has data, overwrite localStorage with server data.
+ * If server has no data but localStorage does, push localStorage data to server.
+ */
+export async function initFromServer(): Promise<void> {
+  if (typeof window === 'undefined') return
+  try {
+    const res = await fetch('/api/sync')
+    if (!res.ok) return
+
+    const data = await res.json()
+
+    if (data.hasData) {
+      // Server has data — overwrite localStorage
+      if (data.profile) {
+        lsSet(LS_PROFILE, data.profile)
+      }
+      if (data.sessions && Array.isArray(data.sessions)) {
+        lsSet(LS_SESSIONS, data.sessions)
+      }
+      if (data.maxHolds && Array.isArray(data.maxHolds)) {
+        lsSet(LS_MAX_HOLDS, data.maxHolds)
+      }
+      if (data.painReports && Array.isArray(data.painReports)) {
+        lsSet(LS_PAIN_REPORTS, data.painReports)
+      }
+    } else {
+      // Server has no data but localStorage might — push local data up
+      const localProfile = lsGet<ProfileData>(LS_PROFILE, DEFAULT_PROFILE)
+      const localSessions = lsGet<WorkoutSession[]>(LS_SESSIONS, [])
+      const localMaxHolds = lsGet<MaxHoldData[]>(LS_MAX_HOLDS, [])
+      const localPainReports = lsGet<PainReportData[]>(LS_PAIN_REPORTS, [])
+
+      // Only sync if there's meaningful local data
+      if (localSessions.length > 0 || localProfile.id !== 'default-user') {
+        fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profile: localProfile,
+            sessions: localSessions,
+            maxHolds: localMaxHolds,
+            painReports: localPainReports,
+          }),
+        }).catch(() => {
+          // Silently ignore
+        })
+      }
+    }
+  } catch {
+    // Silently ignore — app works offline
   }
 }
 
@@ -256,6 +338,7 @@ export function saveProfile(profile: Partial<ProfileData>): ProfileData {
   const current = getProfile()
   const updated = { ...current, ...profile }
   lsSet(LS_PROFILE, updated)
+  syncToServer()
   return updated
 }
 
@@ -299,6 +382,7 @@ export function saveWorkoutSession(session: WorkoutSession): void {
   const sessions = getWorkoutSessions()
   sessions.push(session)
   lsSet(LS_SESSIONS, sessions)
+  syncToServer()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -331,6 +415,7 @@ export function upsertMaxHold(exerciseName: string, maxHoldSeconds: number): Max
     holds.push(entry)
   }
   lsSet(LS_MAX_HOLDS, holds)
+  syncToServer()
   return entry
 }
 
@@ -351,6 +436,7 @@ export function savePainReport(report: Omit<PainReportData, 'id' | 'date'>): Pai
   }
   reports.unshift(entry)
   lsSet(LS_PAIN_REPORTS, reports)
+  syncToServer()
   return entry
 }
 
@@ -483,9 +569,15 @@ export function generateWorkoutToday(): ApiWorkoutResponse {
     focusStageNum = profile.flStage
   }
 
-  const weekNumber = Math.floor(completedSessions / 7) + 1
-  const isDeload = weekNumber % 4 === 0
-  const overloadFactor = 1 + (weekNumber - 1) * 0.05
+  // Progressive overload: factor only increases when a full week (7 sessions) is completed.
+  // 0-6 sessions = week 1, factor 1.0 (no overload)
+  // 7-13 sessions = week 2, factor 1.05 (+5%)
+  // 14-20 sessions = week 3, factor 1.10 (+10%)
+  // etc.
+  const completedWeeks = Math.floor(completedSessions / 7) // fully completed weeks
+  const weekNumber = completedWeeks + 1 // current week number
+  const isDeload = weekNumber > 1 && weekNumber % 4 === 0
+  const overloadFactor = 1 + completedWeeks * 0.05
 
   const now = new Date()
   const dayOfWeek = now.getDay()
@@ -573,7 +665,8 @@ export function getDashboardStats() {
   const maxHolds = getMaxHolds()
   const profile = getProfile()
   const completedSessions = sessions.length
-  const weekNumber = Math.floor(completedSessions / 7) + 1
+  const completedWeeks = Math.floor(completedSessions / 7)
+  const weekNumber = completedWeeks + 1
   const thisWeekSessions = completedSessions % 7
 
   const plancheMaxHold = maxHolds.find(mh =>

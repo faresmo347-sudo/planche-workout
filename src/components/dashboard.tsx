@@ -24,6 +24,8 @@ import {
   Moon,
   Sun,
   RotateCcw,
+  Trophy,
+  Zap,
 } from 'lucide-react'
 import type {
   SkillData,
@@ -537,37 +539,91 @@ export default function Dashboard({ setActiveTab, onWorkoutLogged }: DashboardPr
         </div>
       </motion.div>
 
+      {/* ============ WEEK COMPLETE BANNER ============ */}
+      {stats.thisWeekSessions === 0 && stats.totalWorkouts > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="rounded-2xl shadow-sm bg-primary/5 border-primary/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shrink-0">
+                <Trophy className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Week Complete!
+                  </p>
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary border-0 text-[10px] shrink-0"
+                  >
+                    <Zap className="w-2.5 h-2.5 mr-0.5" />
+                    +5%
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Week {stats.weekNumber - 1} completed! Overload increased by 5%
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* ============ THIS WEEK TRAINING DAYS ============ */}
       <motion.div variants={itemVariants}>
         <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-card">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 shrink-0">
-              <CalendarDays className="w-5 h-5 text-primary" />
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 shrink-0">
+                <CalendarDays className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">
+                  {stats.thisWeekSessions}/7 sessions this week
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.weekNumber != null
+                    ? `Program week ${stats.weekNumber}`
+                    : 'Loading...'}
+                </p>
+              </div>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+                  const isCompleted = day <= stats.thisWeekSessions
+                  return (
+                    <div
+                      key={day}
+                      className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                        isCompleted
+                          ? 'bg-primary'
+                          : 'bg-muted'
+                      }`}
+                    />
+                  )
+                })}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">
-                {stats.thisWeekSessions}/7 sessions this week
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {stats.weekNumber != null
-                  ? `Program week ${stats.weekNumber}`
-                  : 'Loading...'}
-              </p>
-            </div>
-            <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-                const isCompleted = day <= stats.thisWeekSessions
-                return (
-                  <div
-                    key={day}
-                    className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                      isCompleted
-                        ? 'bg-primary'
-                        : 'bg-muted'
-                    }`}
-                  />
-                )
-              })}
+            {/* Weekly progress message */}
+            <div className="mt-3">
+              {stats.thisWeekSessions === 7 ? (
+                <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+                  <Zap className="w-3 h-3" />
+                  Week {stats.weekNumber} completed! Overload increased by 5%
+                </p>
+              ) : stats.thisWeekSessions === 0 && stats.totalWorkouts > 0 ? (
+                <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+                  <Trophy className="w-3 h-3" />
+                  New week started — keep it up!
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Complete all 7 sessions to advance to week {stats.weekNumber + 1}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
