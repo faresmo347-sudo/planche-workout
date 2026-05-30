@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useCallback, useMemo } from 'react'
+import { getPainReports, generateWorkoutToday, savePainReport, getPainSuggestion } from '@/lib/client-data'
 import { format } from 'date-fns'
 import {
   Heart,
   AlertTriangle,
   Activity,
   Shield,
-  Loader2,
 } from 'lucide-react'
 
 import {
@@ -137,18 +136,11 @@ function getSupportMessage(severity: number): string {
 
 // ─── Workout exercise type for the selector ───────────────────────────────────
 
-interface WorkoutExercise {
-  id: string
-  name: string
-  category: string
-  type: string
-}
+// Reuse ApiExercise from types — it has id, name, category, type
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) {
-  const queryClient = useQueryClient()
-
   // Form state
   const [bodyPart, setBodyPart] = useState<BodyPart | ''>('')
   const [severity, setSeverity] = useState<number[]>([3])
@@ -161,60 +153,18 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
   const currentSeverity = severity[0]
   const severityLevel = getSeverityLevel(currentSeverity)
 
-  // Fetch recent pain reports
-  const {
-    data: painReportsData,
-    isLoading: isLoadingReports,
-  } = useQuery({
-    queryKey: ['pain-reports'],
-    queryFn: async () => {
-      const res = await fetch('/api/pain')
-      if (!res.ok) throw new Error('Failed to fetch pain reports')
-      return res.json() as Promise<{ painReports: PainReportData[] }>
-    },
-  })
+  // Recent pain reports (client-side)
+  const painReports = useMemo(() => getPainReports(), [open])
 
-  // Fetch today's workout exercises for the exercise selector
-  const { data: workoutData } = useQuery({
-    queryKey: ['workout-today'],
-    queryFn: async () => {
-      const res = await fetch('/api/workout/today')
-      if (!res.ok) throw new Error('Failed to fetch workout')
-      return res.json() as Promise<{
-        sections: Record<string, WorkoutExercise[]>
-      }>
-    },
-  })
+  // Today's workout exercises for the exercise selector (client-side)
+  const workoutExercises = useMemo(() => {
+    const workout = generateWorkoutToday()
+    return Object.values(workout.sections).flat()
+  }, [open])
 
-  // Flatten all exercises from the workout sections
-  const workoutExercises: WorkoutExercise[] = workoutData?.sections
-    ? Object.values(workoutData.sections).flat()
-    : []
-
-  // Submit mutation
-  const submitMutation = useMutation({
-    mutationFn: async (data: {
-      bodyPart: string
-      severity: number
-      exerciseId?: string
-      notes?: string
-    }) => {
-      const res = await fetch('/api/pain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) throw new Error('Failed to submit pain report')
-      return res.json() as Promise<{
-        painReport: PainReportData
-        suggestion: string
-      }>
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pain-reports'] })
-      setSubmitted(true)
-    },
-  })
+  // Submitted report data (client-side)
+  const [submittedReport, setSubmittedReport] = useState<PainReportData | null>(null)
+  const [submittedSuggestion, setSubmittedSuggestion] = useState<string>('')
 
   // Reset form when dialog opens/closes
   const handleOpenChange = useCallback(
@@ -227,25 +177,31 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
           setNotes('')
           setSelectedExerciseId(exerciseId ?? '')
           setSubmitted(false)
-          submitMutation.reset()
+          setSubmittedReport(null)
+          setSubmittedSuggestion('')
         }, 200)
       }
       onOpenChange(isOpen)
     },
-    [exerciseId, onOpenChange, submitMutation]
+    [exerciseId, onOpenChange]
   )
 
   const handleSubmit = () => {
     if (!bodyPart) return
-    submitMutation.mutate({
+    const suggestion = getPainSuggestion(currentSeverity)
+    const painReport = savePainReport({
       bodyPart,
       severity: currentSeverity,
       exerciseId: selectedExerciseId || undefined,
       notes: notes || undefined,
+      actionTaken: suggestion,
     })
+    setSubmittedReport(painReport)
+    setSubmittedSuggestion(suggestion)
+    setSubmitted(true)
   }
 
-  const canSubmit = bodyPart !== '' && !submitMutation.isPending
+  const canSubmit = bodyPart !== ''
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -267,7 +223,7 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="px-6 pb-4 space-y-5">
             {/* ── Submitted Success State ── */}
-            {submitted && submitMutation.data ? (
+            {submitted && submittedReport ? (
               <div className="space-y-4 py-2">
                 {/* Supportive message */}
                 <div
@@ -282,7 +238,7 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
                       <Separator className="my-2 opacity-50" />
                       <p className="text-sm text-muted-foreground">
                         <span className="font-medium">Recommendation:</span>{' '}
-                        {submitMutation.data.suggestion}
+                        {submittedSuggestion}
                       </p>
                     </div>
                   </div>
@@ -301,12 +257,12 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
                       Severity {currentSeverity}/10
                     </Badge>
                     <Badge variant="outline">
-                      {submitMutation.data.painReport.bodyPart}
+                      {submittedReport.bodyPart}
                     </Badge>
                   </div>
-                  {submitMutation.data.painReport.notes && (
+                  {submittedReport.notes && (
                     <p className="text-sm text-muted-foreground">
-                      &ldquo;{submitMutation.data.painReport.notes}&rdquo;
+                      &ldquo;{submittedReport.notes}&rdquo;
                     </p>
                   )}
                 </div>
@@ -460,7 +416,7 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
             )}
 
             {/* ── Recent Pain Reports ── */}
-            {painReportsData && painReportsData.painReports.length > 0 && (
+            {painReports.length > 0 && (
               <>
                 <Separator />
 
@@ -473,7 +429,7 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
                   </div>
 
                   <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                    {painReportsData.painReports.map((report) => (
+                    {painReports.map((report) => (
                       <div
                         key={report.id}
                         className={`rounded-md border p-3 ${getSeverityBg(report.severity)}`}
@@ -513,13 +469,6 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
                 </div>
               </>
             )}
-
-            {isLoadingReports && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Loading recent reports...
-              </div>
-            )}
           </div>
         </ScrollArea>
 
@@ -529,7 +478,6 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
             <Button
               variant="outline"
               onClick={() => handleOpenChange(false)}
-              disabled={submitMutation.isPending}
             >
               Cancel
             </Button>
@@ -538,17 +486,10 @@ export function PainDialog({ open, onOpenChange, exerciseId }: PainDialogProps) 
               disabled={!canSubmit}
               className="gap-2"
             >
-              {submitMutation.isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Heart className="size-4" />
-                  Submit Report
-                </>
-              )}
+              <>
+                <Heart className="size-4" />
+                Submit Report
+              </>
             </Button>
           </DialogFooter>
         )}

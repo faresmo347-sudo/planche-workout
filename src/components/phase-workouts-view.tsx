@@ -1,8 +1,8 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { SKILLS, getProfile } from '@/lib/client-data'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import {
   CircleDot,
   GripHorizontal,
@@ -38,25 +38,7 @@ import {
 } from '@/components/ui/collapsible'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-import type { SkillData, StageData, ProfileData } from '@/lib/types'
-
-/* ------------------------------------------------------------------ */
-/*  API fetchers                                                       */
-/* ------------------------------------------------------------------ */
-
-async function fetchSkills(): Promise<SkillData[]> {
-  const res = await fetch('/api/skills')
-  if (!res.ok) throw new Error('Failed to fetch skills')
-  const data = await res.json()
-  return data.skills
-}
-
-async function fetchProfile(): Promise<ProfileData> {
-  const res = await fetch('/api/profile')
-  if (!res.ok) throw new Error('Failed to fetch profile')
-  const data = await res.json()
-  return data.profile
-}
+import type { SkillData, StageData } from '@/lib/types'
 
 /* ------------------------------------------------------------------ */
 /*  Animation variants                                                 */
@@ -315,7 +297,7 @@ function ExerciseRow({ exercise, index }: { exercise: StageData['exercises'][0];
       <div className="text-right shrink-0">
         <p className="text-xs font-medium text-foreground">{target}</p>
         <p className="text-[10px] text-muted-foreground">
-          {exercise.targetSetsMin}-{exercise.targetSetsMax} sets
+          {exercise.targetSets} sets
         </p>
       </div>
     </motion.div>
@@ -536,65 +518,16 @@ function SkillPhaseBrowser({
 /* ------------------------------------------------------------------ */
 
 export default function PhaseWorkoutsView() {
-  const { data: skills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useQuery({
-    queryKey: ['skills'],
-    queryFn: fetchSkills,
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
-  const { data: profile, isLoading: profileLoading, isError: profileError, refetch: refetchProfile } = useQuery({
-    queryKey: ['profile'],
-    queryFn: fetchProfile,
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
   const [activeSkill, setActiveSkill] = useState<'planche' | 'front_lever'>('planche')
 
-  const plancheSkill = skills?.find((s) => s.name === 'planche')
-  const flSkill = skills?.find((s) => s.name === 'front_lever')
+  const plancheSkill = SKILLS.find((s) => s.name === 'planche')
+  const flSkill = SKILLS.find((s) => s.name === 'front_lever')
   const currentSkill = activeSkill === 'planche' ? plancheSkill : flSkill
+  const profile = getProfile()
   const currentStageNum =
     activeSkill === 'planche'
-      ? profile?.plancheStage ?? 1
-      : profile?.flStage ?? 1
-
-  const isLoading = skillsLoading || profileLoading
-
-  /* ---- Loading skeleton ---- */
-  if (isLoading) {
-    return (
-      <div className="space-y-5 pb-8">
-        <div className="h-8 w-48 bg-muted rounded-lg animate-pulse" />
-        <div className="h-10 bg-muted rounded-xl animate-pulse" />
-        <div className="h-16 bg-muted rounded-2xl animate-pulse" />
-        <div className="h-72 bg-muted rounded-2xl animate-pulse" />
-      </div>
-    )
-  }
-
-  if (!currentSkill && (skillsError || profileError)) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Card className="rounded-2xl shadow-sm max-w-sm w-full">
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <Layers className="w-12 h-12 text-muted-foreground/30 mb-4" />
-            <p className="text-sm text-muted-foreground mb-1">Failed to load skill data</p>
-            <p className="text-xs text-muted-foreground mb-4">Something went wrong. Please try again.</p>
-            <Button
-              onClick={() => { refetchSkills(); refetchProfile(); }}
-              variant="outline"
-              size="sm"
-              className="rounded-xl"
-            >
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+      ? profile.plancheStage
+      : profile.flStage
 
   if (!currentSkill) {
     return (

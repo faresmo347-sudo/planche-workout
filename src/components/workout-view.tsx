@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { generateWorkoutToday, saveWorkoutSession, type WorkoutSession } from '@/lib/client-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play, Pause, RotateCcw, Check, Plus, Minus, Info,
@@ -1540,10 +1540,10 @@ const WORKOUT_PROGRESS_KEY = 'workout-progress'
 
 interface WorkoutViewProps {
   setActiveTab?: (tab: string) => void
+  onWorkoutLogged?: () => void
 }
 
-export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
-  const queryClient = useQueryClient()
+export default function WorkoutView({ setActiveTab, onWorkoutLogged }: WorkoutViewProps) {
   const [workout, setWorkout] = useState<ApiWorkoutResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1554,14 +1554,12 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
   const [submitting, setSubmitting] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Fetch workout data with retry logic
-  const fetchWorkoutData = useCallback(async (retryCount = 0) => {
+  // Load workout data from client-side store
+  useEffect(() => {
     try {
-      setLoading(retryCount === 0)
+      setLoading(true)
       setError(null)
-      const res = await fetch('/api/workout/today')
-      if (!res.ok) throw new Error('Failed to fetch workout')
-      const data: ApiWorkoutResponse = await res.json()
+      const data: ApiWorkoutResponse = generateWorkoutToday()
       setWorkout(data)
 
       // Initialize exercise states
@@ -1612,21 +1610,11 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
 
       setExerciseStates(states)
     } catch (err) {
-      // Auto-retry up to 2 times with 1s delay
-      if (retryCount < 2) {
-        setTimeout(() => fetchWorkoutData(retryCount + 1), 1000)
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load workout')
-      }
+      setError(err instanceof Error ? err.message : 'Failed to load workout')
     } finally {
       setLoading(false)
     }
   }, [])
-
-  // Fetch workout on mount
-  useEffect(() => {
-    fetchWorkoutData()
-  }, [fetchWorkoutData])
 
   // Persist exercise states and navigation to localStorage
   useEffect(() => {
@@ -1814,39 +1802,46 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
         }
       }
 
-      const response = await fetch('/api/workout/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: new Date().toISOString(),
-          dayType: workout.dayType,
-          weekNumber: workout.weekNumber,
-          isDeload: workout.isDeload,
-          exercises: allLoggedSets,
-        }),
-      })
+      // Build session object from logged sets
+      const session: WorkoutSession = {
+        id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+        date: new Date().toISOString(),
+        dayType: workout.dayType,
+        weekNumber: workout.weekNumber,
+        isDeload: workout.isDeload,
+        completed: true,
+        notes: null,
+        exercises: allLoggedSets.map((set) => ({
+          exerciseId: set.exerciseId,
+          exerciseName: allExercisesWithSection.find(e => e.exercise.id === set.exerciseId)?.exercise.name ?? set.exerciseId,
+          type: allExercisesWithSection.find(e => e.exercise.id === set.exerciseId)?.exercise.type ?? 'dynamic',
+          category: allExercisesWithSection.find(e => e.exercise.id === set.exerciseId)?.exercise.category ?? 'accessory',
+          setNumber: set.setNumber,
+          holdTimeSeconds: set.holdTimeSeconds ?? null,
+          reps: set.reps ?? null,
+          weightKg: set.weightKg ?? null,
+          rpe: set.rpe ?? null,
+          painReported: set.painReported ?? false,
+          painNotes: set.painNotes ?? null,
+        })),
+      }
 
-      if (!response.ok) throw new Error('Failed to log workout')
+      saveWorkoutSession(session)
 
       // Clear saved progress from localStorage
       localStorage.removeItem(WORKOUT_PROGRESS_KEY)
 
-      // Invalidate React Query caches so dashboard/progress views refresh
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['workout-today'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
-        queryClient.invalidateQueries({ queryKey: ['workout-history'] }),
-        queryClient.invalidateQueries({ queryKey: ['progress'] }),
-      ])
-
       setWorkoutComplete(true)
+
+      // Notify parent that workout was logged
+      onWorkoutLogged?.()
     } catch (err) {
       // Don't use setError here — that would wipe the workout view
       setSaveError(err instanceof Error ? err.message : 'Failed to save workout. Your data is saved locally — try again.')
     } finally {
       setSubmitting(false)
     }
-  }, [workout, exerciseStates, queryClient])
+  }, [workout, exerciseStates, allExercisesWithSection, onWorkoutLogged])
 
   // Loading state
   if (loading) {
@@ -1872,7 +1867,27 @@ export default function WorkoutView({ setActiveTab }: WorkoutViewProps) {
           <AlertCircle className="w-10 h-10 text-destructive mx-auto mb-3" />
           <h3 className="font-semibold text-lg mb-2">Something went wrong</h3>
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
-          <Button onClick={() => fetchWorkoutData(0)} className="min-h-[44px]">
+          <Button onClick={() => {
+            setError(null)
+            setLoading(true)
+            try {
+              const data: ApiWorkoutResponse = generateWorkoutToday()
+              setWorkout(data)
+              const states: Record<string, ExerciseState> = {}
+              for (const sectionKey of SECTION_ORDER) {
+                for (const ex of data.sections[sectionKey]) {
+                  states[ex.id] = { currentSet: 1, completedSets: 0, isComplete: false, sets: [] }
+                }
+              }
+              setExerciseStates(states)
+              setCurrentSectionIndex(0)
+              setCurrentExerciseIndex(0)
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Failed to load workout')
+            } finally {
+              setLoading(false)
+            }
+          }} className="min-h-[44px]">
             <RotateCcw className="w-4 h-4 mr-2" />
             Try Again
           </Button>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { SKILLS, getProfile, getProgressData, getMaxHolds, getWorkoutHistory } from '@/lib/client-data'
 import { motion } from 'framer-motion'
 import {
   TrendingUp,
@@ -764,100 +764,34 @@ function MaxHoldsSection({ maxHolds }: { maxHolds: MaxHoldData[] }) {
 /* -------------------------------------------------------------------------- */
 
 export default function ProgressView() {
-  const { data: progressData, isLoading: progressLoading, isError: progressError, refetch: refetchProgress } = useQuery<ProgressApiResponse>({
-    queryKey: ['progress'],
-    queryFn: async () => {
-      const res = await fetch('/api/progress')
-      if (!res.ok) throw new Error('Failed to fetch progress')
-      return res.json()
-    },
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
+  const progressData = getProgressData()
+  const profile = getProfile()
+  const skills = SKILLS
+  const maxHolds = getMaxHolds()
+  const rawHistory = getWorkoutHistory()
 
-  const { data: profileData, isError: profileError } = useQuery<{ profile: ProfileData }>({
-    queryKey: ['profile'],
-    queryFn: async () => {
-      const res = await fetch('/api/profile')
-      if (!res.ok) throw new Error('Failed to fetch profile')
-      return res.json()
-    },
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
-  const { data: skillsData, isError: skillsError } = useQuery<{ skills: SkillData[] }>({
-    queryKey: ['skills'],
-    queryFn: async () => {
-      const res = await fetch('/api/skills')
-      if (!res.ok) throw new Error('Failed to fetch skills')
-      return res.json()
-    },
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
-  const { data: maxHoldsData, isError: maxHoldsError } = useQuery<{ maxHolds: MaxHoldData[] }>({
-    queryKey: ['maxholds'],
-    queryFn: async () => {
-      const res = await fetch('/api/maxholds')
-      if (!res.ok) throw new Error('Failed to fetch max holds')
-      return res.json()
-    },
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
-  const { data: historyData, isError: historyError, refetch: refetchHistory } = useQuery<{ history: WorkoutHistoryItem[] }>({
-    queryKey: ['workout-history'],
-    queryFn: async () => {
-      const res = await fetch('/api/workout/history')
-      if (!res.ok) throw new Error('Failed to fetch workout history')
-      return res.json()
-    },
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
-  const profile = profileData?.profile ?? null
-  const skills = skillsData?.skills ?? []
   const plancheSkill = skills.find((s) => s.name === 'planche')
   const flSkill = skills.find((s) => s.name === 'front_lever')
 
-  /* ------ Loading skeleton ------ */
-  if (progressLoading) {
-    return (
-      <div className="min-h-screen bg-background p-4 sm:p-6 max-w-2xl mx-auto space-y-5">
-        <div className="h-8 w-48 bg-stone-100 rounded-lg animate-pulse" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-64 bg-stone-50 rounded-2xl animate-pulse" />
-          ))}
-        </div>
-        <div className="h-72 bg-stone-50 rounded-2xl animate-pulse" />
-        <div className="h-52 bg-stone-50 rounded-2xl animate-pulse" />
-      </div>
-    )
-  }
-
-  /* ------ Error / Empty state ------ */
-  if (!progressData && progressError) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="rounded-2xl shadow-sm max-w-sm w-full">
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <BarChart3 className="w-12 h-12 text-stone-300 mb-4" />
-            <p className="text-sm text-muted-foreground mb-1">Failed to load progress</p>
-            <p className="text-xs text-muted-foreground mb-4">Something went wrong. Please try again.</p>
-            <Button onClick={() => refetchProgress()} variant="outline" size="sm" className="rounded-xl">
-              <RotateCcw className="w-3.5 h-3.5 mr-1" />
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // Map workout history to match WorkoutHistoryItem shape
+  const history: WorkoutHistoryItem[] = rawHistory.map((session) => ({
+    id: session.id,
+    date: session.date,
+    dayType: session.dayType,
+    weekNumber: session.weekNumber,
+    isDeload: session.isDeload,
+    completed: session.completed,
+    exercisesCompleted: session.exercisesCompleted,
+    exercises: session.exercises.map((ex: any) => ({
+      name: ex.exerciseName ?? ex.name,
+      type: ex.type,
+      category: ex.category,
+      setNumber: ex.setNumber,
+      holdTimeSeconds: ex.holdTimeSeconds,
+      reps: ex.reps,
+      rpe: ex.rpe,
+    })),
+  }))
 
   if (!progressData) {
     return (
@@ -934,34 +868,12 @@ export default function ProgressView() {
 
         {/* Workout History */}
         <section>
-          {historyError && !historyData ? (
-            <Card className="rounded-2xl shadow-sm border-stone-200/60">
-              <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-                <Calendar className="w-10 h-10 text-stone-300 mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">Failed to load workout history</p>
-                <Button onClick={() => refetchHistory()} variant="outline" size="sm" className="rounded-xl">
-                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                  Try Again
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <WorkoutHistorySection history={historyData?.history ?? []} />
-          )}
+          <WorkoutHistorySection history={history} />
         </section>
 
         {/* Max Holds */}
         <section>
-          {maxHoldsError && !maxHoldsData ? (
-            <Card className="rounded-2xl shadow-sm border-stone-200/60">
-              <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-                <Award className="w-10 h-10 text-stone-300 mb-3" />
-                <p className="text-sm text-muted-foreground">Failed to load max hold data</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <MaxHoldsSection maxHolds={maxHoldsData?.maxHolds ?? []} />
-          )}
+          <MaxHoldsSection maxHolds={maxHolds} />
         </section>
 
         {/* Bottom spacer for mobile */}

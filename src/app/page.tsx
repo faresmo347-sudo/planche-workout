@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Home as HomeIcon,
@@ -34,9 +34,15 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [showPainDialog, setShowPainDialog] = useState(false)
 
+  const [workoutKey, setWorkoutKey] = useState(0)
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab as TabId)
   }
+
+  const handleWorkoutLogged = useCallback(() => {
+    setWorkoutKey((k) => k + 1)
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -51,10 +57,10 @@ export default function Home() {
             transition={{ duration: 0.2, ease: 'easeOut' }}
           >
             {activeTab === 'dashboard' && (
-              <Dashboard setActiveTab={handleTabChange} />
+              <Dashboard setActiveTab={handleTabChange} onWorkoutLogged={handleWorkoutLogged} />
             )}
             {activeTab === 'workout' && (
-              <WorkoutView setActiveTab={handleTabChange} />
+              <WorkoutView setActiveTab={handleTabChange} onWorkoutLogged={handleWorkoutLogged} />
             )}
             {activeTab === 'phases' && (
               <PhaseWorkoutsView />

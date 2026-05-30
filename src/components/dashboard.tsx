@@ -1,7 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Card,
@@ -27,18 +26,27 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import type {
-  ProfileData,
   SkillData,
   StageData,
   ApiWorkoutResponse,
   ApiExercise,
+  ProfileData,
 } from '@/lib/types'
+import {
+  SKILLS,
+  getProfile,
+  generateWorkoutToday,
+  getDashboardStats,
+  saveWorkoutSession,
+  type WorkoutSession,
+} from '@/lib/client-data'
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
 /* ------------------------------------------------------------------ */
 interface DashboardProps {
   setActiveTab: (tab: string) => void
+  onWorkoutLogged?: () => void
 }
 
 /* ------------------------------------------------------------------ */
@@ -61,7 +69,6 @@ const itemVariants = {
 /*  Hydration-safe greeting store                                      */
 /* ------------------------------------------------------------------ */
 
-// Cached snapshots to avoid infinite loop in useSyncExternalStore
 const SERVER_GREETING = { text: 'Hello', Icon: Sun } as const
 let _clientGreeting: { text: string; Icon: typeof Sun } | null = null
 
@@ -163,43 +170,6 @@ function getCategoryBadgeVariant(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Fetchers                                                           */
-/* ------------------------------------------------------------------ */
-async function fetchProfile(): Promise<ProfileData> {
-  const res = await fetch('/api/profile')
-  if (!res.ok) throw new Error('Failed to fetch profile')
-  const data = await res.json()
-  return data.profile
-}
-
-async function fetchSkills(): Promise<SkillData[]> {
-  const res = await fetch('/api/skills')
-  if (!res.ok) throw new Error('Failed to fetch skills')
-  const data = await res.json()
-  return data.skills
-}
-
-async function fetchWorkoutToday(): Promise<ApiWorkoutResponse> {
-  const res = await fetch('/api/workout/today')
-  if (!res.ok) throw new Error('Failed to fetch workout')
-  return res.json()
-}
-
-async function fetchDashboardStats(): Promise<{
-  totalWorkouts: number
-  plancheMaxHold: number | null
-  plancheMaxHoldName: string | null
-  flMaxHold: number | null
-  flMaxHoldName: string | null
-  thisWeekSessions: number
-  weekNumber: number
-}> {
-  const res = await fetch('/api/dashboard/stats')
-  if (!res.ok) throw new Error('Failed to fetch stats')
-  return res.json()
-}
-
-/* ------------------------------------------------------------------ */
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -285,13 +255,10 @@ function SkillProgressCard({
 /* ------------------------------------------------------------------ */
 /*  Main Dashboard Component                                           */
 /* ------------------------------------------------------------------ */
-export default function Dashboard({ setActiveTab }: DashboardProps) {
+export default function Dashboard({ setActiveTab, onWorkoutLogged }: DashboardProps) {
   /* ---- in-progress workout check (hydration-safe) ---- */
   const hasInProgressWorkout = useSyncExternalStore(
-    // Subscribe: localStorage doesn't fire events we can listen to cross-tab here,
-    // so we return a no-op unsubscribe.
     () => () => {},
-    // Client snapshot
     () => {
       try {
         const savedRaw = localStorage.getItem('workout-progress')
@@ -306,48 +273,21 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
       }
       return false
     },
-    // Server snapshot — always false to avoid hydration mismatch
     () => false
   )
 
-  /* ---- data queries ---- */
-  const profileQuery = useQuery({
-    queryKey: ['profile'],
-    queryFn: fetchProfile,
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-  const skillsQuery = useQuery({
-    queryKey: ['skills'],
-    queryFn: fetchSkills,
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-  const workoutQuery = useQuery({
-    queryKey: ['workout-today'],
-    queryFn: fetchWorkoutToday,
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-  const statsQuery = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: fetchDashboardStats,
-    retry: 2,
-    placeholderData: (prev) => prev,
-  })
-
-  const profile = profileQuery.data
-  const skills = skillsQuery.data ?? []
-  const workout = workoutQuery.data
-  const stats = statsQuery.data
-  const statsError = statsQuery.isError && !statsQuery.data
+  /* ---- load data from client store ---- */
+  const profile: ProfileData = getProfile()
+  const skills: SkillData[] = SKILLS
+  const workout: ApiWorkoutResponse = generateWorkoutToday()
+  const stats = getDashboardStats()
 
   const plancheSkill = skills.find((s) => s.name === 'planche')
   const flSkill = skills.find((s) => s.name === 'front_lever')
 
   const monthsElapsed = profile ? getMonthsElapsed(profile.startDate) : 0
 
-  // Hydration-safe greeting: useSyncExternalStore with cached snapshots
+  // Hydration-safe greeting
   const { text: greeting, Icon: GreetingIcon } = useSyncExternalStore(
     serverGreetingSubscribe,
     getGreetingSnapshot,
@@ -358,13 +298,6 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
   const nonWarmupExercises = workout ? getNonWarmupExercises(workout.sections) : []
   const totalExercises = workout ? countAllExercises(workout.sections) : 0
   const duration = workout ? estimateDuration(workout.sections) : 0
-
-  const isLoading =
-    profileQuery.isLoading ||
-    skillsQuery.isLoading ||
-    workoutQuery.isLoading
-
-  const workoutError = workoutQuery.isError && !workoutQuery.data
 
   /* ---- render ---- */
   return (
@@ -484,34 +417,7 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-                <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
-                <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
-              </div>
-            ) : workoutError ? (
-              <div className="flex flex-col items-center py-6 text-center">
-                <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-3">
-                  <Dumbbell className="w-7 h-7 text-primary" />
-                </div>
-                <p className="text-sm font-medium text-foreground mb-1">
-                  Unable to load workout
-                </p>
-                <p className="text-xs text-muted-foreground max-w-[240px] leading-relaxed mb-4">
-                  Something went wrong. Try refreshing or start a fresh session.
-                </p>
-                <Button
-                  onClick={() => workoutQuery.refetch()}
-                  variant="outline"
-                  className="rounded-xl min-h-[40px]"
-                  size="sm"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                  Try Again
-                </Button>
-              </div>
-            ) : isRestDay ? (
+            {isRestDay ? (
               <div className="flex flex-col items-center py-6 text-center">
                 <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-3">
                   <Leaf className="w-7 h-7 text-primary" />
@@ -587,7 +493,7 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <TrendingUp className="w-4 h-4 text-primary" />
               </div>
               <span className="text-xl font-semibold leading-none">
-                {statsError ? '—' : (stats?.totalWorkouts ?? 0)}
+                {stats.totalWorkouts}
               </span>
               <span className="text-[11px] text-muted-foreground mt-1">
                 Workouts
@@ -602,9 +508,9 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <CircleDot className="w-4 h-4 text-primary" />
               </div>
               <span className="text-xl font-semibold leading-none">
-                {statsError ? '—' : (stats?.plancheMaxHold != null
+                {stats.plancheMaxHold != null
                   ? `${Math.round(stats.plancheMaxHold)}s`
-                  : '—')}
+                  : '—'}
               </span>
               <span className="text-[11px] text-muted-foreground mt-1">
                 Planche
@@ -619,9 +525,9 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
                 <GripHorizontal className="w-4 h-4 text-primary" />
               </div>
               <span className="text-xl font-semibold leading-none">
-                {statsError ? '—' : (stats?.flMaxHold != null
+                {stats.flMaxHold != null
                   ? `${Math.round(stats.flMaxHold)}s`
-                  : '—')}
+                  : '—'}
               </span>
               <span className="text-[11px] text-muted-foreground mt-1">
                 Front Lever
@@ -640,19 +546,17 @@ export default function Dashboard({ setActiveTab }: DashboardProps) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">
-                {statsError ? '— sessions this week' : `${stats?.thisWeekSessions ?? 0}/7 sessions this week`}
+                {stats.thisWeekSessions}/7 sessions this week
               </p>
               <p className="text-xs text-muted-foreground">
-                {statsError
-                  ? 'Unable to load stats'
-                  : stats?.weekNumber != null
-                    ? `Program week ${stats.weekNumber}`
-                    : 'Loading...'}
+                {stats.weekNumber != null
+                  ? `Program week ${stats.weekNumber}`
+                  : 'Loading...'}
               </p>
             </div>
             <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-                const isCompleted = day <= (stats?.thisWeekSessions ?? 0)
+                const isCompleted = day <= stats.thisWeekSessions
                 return (
                   <div
                     key={day}
