@@ -238,7 +238,7 @@ function PhaseTimeline({
                     : 'text-muted-foreground'
                 }`}
               >
-                Mo {stage.startMonth}-{stage.endMonth}
+                {stage.weeksDuration}wk
               </span>
             </button>
 
@@ -371,7 +371,6 @@ function StageDetailCard({
   }))
 
   const totalExercises = stage.exercises.length
-  const durationMonths = stage.endMonth - stage.startMonth
 
   return (
     <motion.div
@@ -427,8 +426,8 @@ function StageDetailCard({
             </div>
             <div className="bg-muted/50 rounded-lg p-2.5 text-center">
               <Calendar className="w-3.5 h-3.5 text-muted-foreground mx-auto mb-1" />
-              <p className="text-sm font-semibold">{durationMonths}</p>
-              <p className="text-[10px] text-muted-foreground">Months</p>
+              <p className="text-sm font-semibold">{stage.weeksDuration}</p>
+              <p className="text-[10px] text-muted-foreground">Weeks</p>
             </div>
             <div className="bg-muted/50 rounded-lg p-2.5 text-center">
               <Clock className="w-3.5 h-3.5 text-muted-foreground mx-auto mb-1" />
@@ -645,7 +644,7 @@ export default function PhaseWorkoutsView() {
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-muted-foreground">
-                        Mo {stage.startMonth}-{stage.endMonth}
+                        {stage.weeksDuration} weeks
                       </span>
                       <span className="text-muted-foreground/40">·</span>
                       <span className="text-[10px] text-muted-foreground">

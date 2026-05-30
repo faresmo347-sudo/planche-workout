@@ -32,11 +32,14 @@ export interface StageData {
   goalDescription: string
   startMonth: number
   endMonth: number
+  /** How many weeks this stage lasts (e.g. 26 weeks = 6 months). */
+  weeksDuration: number
   targetHoldMin: number | null
   targetHoldMax: number | null
   /** How many skill-specific workouts must be completed to advance to the next stage.
    *  Set to 0 for the first stage of each skill.
-   *  Cumulative: stage 2 might require 18, stage 3 requires 42, etc.
+   *  Cumulative: stage 2 requires 104, stage 3 requires 208, stage 4 requires 312.
+   *  (26 weeks × 4 skill workouts per week = 104 per stage)
    */
   workoutsRequired: number
   exercises: ExerciseData[]

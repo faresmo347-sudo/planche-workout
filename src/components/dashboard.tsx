@@ -233,7 +233,7 @@ function SkillProgressCard({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">
-              {isMaxStage ? 'Stage mastered' : `${stageProgress.workoutsInStage}/${stageProgress.workoutsNeeded} workouts`}
+              {isMaxStage ? 'Stage mastered' : `Week ${stageProgress.currentWeekInStage}/${stageProgress.totalWeeksInStage} · ${stageProgress.workoutsInStage}/${stageProgress.workoutsNeeded} workouts`}
             </span>
             <span className="font-medium text-primary">{progress}%</span>
           </div>

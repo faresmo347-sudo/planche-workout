@@ -177,15 +177,18 @@ export function computeCurrentStage(skillName: 'planche' | 'front_lever'): numbe
 
 /**
  * Get stage progress info based on workouts completed (not time).
+ * Includes the current week within the stage (0-indexed workouts → week number).
  */
 export function getStageProgressByWorkouts(skillName: 'planche' | 'front_lever'): {
   currentStage: number
   workoutsInStage: number
   workoutsNeeded: number
+  currentWeekInStage: number
+  totalWeeksInStage: number
   percentComplete: number
 } {
   const skill = SKILLS.find(s => s.name === skillName)
-  if (!skill) return { currentStage: 1, workoutsInStage: 0, workoutsNeeded: 0, percentComplete: 0 }
+  if (!skill) return { currentStage: 1, workoutsInStage: 0, workoutsNeeded: 0, currentWeekInStage: 0, totalWeeksInStage: 26, percentComplete: 0 }
 
   const currentStage = computeCurrentStage(skillName)
   const currentStageData = skill.stages.find(s => s.stageNumber === currentStage)
@@ -193,7 +196,7 @@ export function getStageProgressByWorkouts(skillName: 'planche' | 'front_lever')
 
   if (!currentStageData || !nextStageData) {
     // Already at max stage
-    return { currentStage, workoutsInStage: 0, workoutsNeeded: 0, percentComplete: 100 }
+    return { currentStage, workoutsInStage: 0, workoutsNeeded: 0, currentWeekInStage: 0, totalWeeksInStage: currentStageData?.weeksDuration ?? 26, percentComplete: 100 }
   }
 
   const totalSkillWorkouts = countSkillWorkouts(skillName)
@@ -201,10 +204,15 @@ export function getStageProgressByWorkouts(skillName: 'planche' | 'front_lever')
   const workoutsNeededForNext = nextStageData.workoutsRequired - currentStageData.workoutsRequired
   const percentComplete = Math.min(100, Math.round((workoutsInCurrentStage / workoutsNeededForNext) * 100))
 
+  // 4 skill workouts per week, so currentWeekInStage = floor(workoutsInCurrentStage / 4) + 1
+  const currentWeekInStage = Math.min(currentStageData.weeksDuration, Math.floor(workoutsInCurrentStage / 4) + 1)
+
   return {
     currentStage,
     workoutsInStage: workoutsInCurrentStage,
     workoutsNeeded: workoutsNeededForNext,
+    currentWeekInStage,
+    totalWeeksInStage: currentStageData.weeksDuration,
     percentComplete,
   }
 }
@@ -227,16 +235,18 @@ export const SKILLS: SkillData[] = [
         goalDescription: 'Achieve a consistent 15-20 second Tuck Planche hold and progress to a 5-10 second Advanced Tuck Planche hold',
         startMonth: 1,
         endMonth: 6,
+        weeksDuration: 26,
         targetHoldMin: 15,
         targetHoldMax: 20,
         workoutsRequired: 0,
         exercises: [
-          { id: 'p1-tuck-planche', name: 'Tuck Planche Hold', category: 'skill', type: 'isometric', description: 'Hold tuck planche position on fingers with knees tucked to chest', formCues: ['Lean shoulders forward past hands', 'Push down through fingers', 'Lock elbows straight', 'Tuck knees tight to chest', 'Protract shoulders fully', 'Look at hands'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 12, restSeconds: 180 },
-          { id: 'p1-adv-tuck-planche', name: 'Advanced Tuck Planche Hold', category: 'skill', type: 'isometric', description: 'Hold advanced tuck with back flat and hips pushed away from hands', formCues: ['Back must be flat, not rounded', 'Hips pushed away from hands', 'Arms completely straight', 'Shoulders protracted', 'Core braced tight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 3, targetHoldMax: 8, restSeconds: 180 },
-          { id: 'p1-pppu', name: 'Pseudo Planche Push-ups', category: 'accessory', type: 'dynamic', description: 'Push-ups with hands positioned lower toward waist to increase lean', formCues: ['Hands positioned at waist level', 'Lean shoulders past hands', 'Elbows tucked to sides', 'Full range of motion', 'Maintain hollow body'], targetSets: 3, targetRepsMin: 6, targetRepsMax: 12, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
-          { id: 'p1-planche-leans', name: 'Planche Leans (Tuck)', category: 'accessory', type: 'isometric', description: 'Lean forward in tuck position to build straight-arm strength', formCues: ['Lean as far forward as possible', 'Keep arms locked straight', 'Maintain tuck position', 'Protract shoulders hard', 'Hold for time'], targetSets: 3, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 10, targetHoldMax: 20, restSeconds: 120 },
-          { id: 'p1-scap-pushups', name: 'Scapular Push-ups', category: 'accessory', type: 'dynamic', description: 'Push-ups focusing on scapular protraction and retraction', formCues: ['Arms stay straight', 'Only shoulder blades move', 'Push floor away (protraction)', 'Let chest sink (retraction)', 'Full range of motion'], targetSets: 3, targetRepsMin: 10, targetRepsMax: 15, targetHoldMin: null, targetHoldMax: null, restSeconds: 90 },
-          { id: 'p1-hollow-body', name: 'Hollow Body Hold', category: 'core', type: 'isometric', description: 'Lying on back, lift shoulders and legs while pressing lower back into floor', formCues: ['Lower back pressed into floor', 'Arms extended overhead', 'Legs straight and together', 'Core fully braced', 'Breathe steadily'], targetSets: 3, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 15, targetHoldMax: 30, restSeconds: 60 },
+          { id: 'p1-tuck-planche', name: 'Tuck Planche Hold', category: 'skill', type: 'isometric', description: 'Foundation hold — build straight-arm pushing strength with knees tucked tight', formCues: ['Lean shoulders forward past hands', 'Push down through fingers', 'Lock elbows straight', 'Tuck knees tight to chest', 'Protract shoulders fully', 'Look at hands'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 12, restSeconds: 180 },
+          { id: 'p1-adv-tuck-planche', name: 'Advanced Tuck Planche Hold', category: 'skill', type: 'isometric', description: 'Elevate hips to shoulder height with flat back — the bridge to straddle', formCues: ['Back must be flat, not rounded', 'Hips pushed away from hands', 'Arms completely straight', 'Shoulders protracted', 'Core braced tight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 3, targetHoldMax: 8, restSeconds: 180 },
+          { id: 'p1-pppu', name: 'Pseudo Planche Push-ups', category: 'accessory', type: 'dynamic', description: 'Build planche-specific pushing power with increased lean angle', formCues: ['Hands positioned at waist level', 'Lean shoulders past hands', 'Elbows tucked to sides', 'Full range of motion', 'Maintain hollow body'], targetSets: 3, targetRepsMin: 6, targetRepsMax: 12, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
+          { id: 'p1-planche-leans', name: 'Planche Leans (Tuck)', category: 'accessory', type: 'isometric', description: 'Build extreme straight-arm lean strength — the key to planche', formCues: ['Lean as far forward as possible', 'Keep arms locked straight', 'Maintain tuck position', 'Protract shoulders hard', 'Hold for time'], targetSets: 3, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 10, targetHoldMax: 20, restSeconds: 120 },
+          { id: 'p1-scap-pushups', name: 'Scapular Push-ups', category: 'accessory', type: 'dynamic', description: 'Isolate scapular protraction — essential for planche stability', formCues: ['Arms stay straight', 'Only shoulder blades move', 'Push floor away (protraction)', 'Let chest sink (retraction)', 'Full range of motion'], targetSets: 3, targetRepsMin: 10, targetRepsMax: 15, targetHoldMin: null, targetHoldMax: null, restSeconds: 90 },
+          { id: 'p1-frog-stand', name: 'Frog Stand Hold', category: 'accessory', type: 'isometric', description: 'Balance on hands with knees on elbows — build wrist and balance foundation', formCues: ['Knees resting on triceps', 'Lean forward progressively', 'Fingers grip the floor', 'Look at hands', 'Build to 30+ seconds'], targetSets: 3, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 15, targetHoldMax: 30, restSeconds: 90 },
+          { id: 'p1-hollow-body', name: 'Hollow Body Hold', category: 'core', type: 'isometric', description: 'Build the core compression needed to hold planche', formCues: ['Lower back pressed into floor', 'Arms extended overhead', 'Legs straight and together', 'Core fully braced', 'Breathe steadily'], targetSets: 3, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 15, targetHoldMax: 30, restSeconds: 60 },
         ],
       },
       {
@@ -245,17 +255,19 @@ export const SKILLS: SkillData[] = [
         name: 'Straddle Planche',
         goalDescription: 'Achieve a consistent 5-10 second Straddle Planche hold with perfect form',
         startMonth: 7,
-        endMonth: 15,
+        endMonth: 12,
+        weeksDuration: 26,
         targetHoldMin: 5,
         targetHoldMax: 10,
-        workoutsRequired: 18,
+        workoutsRequired: 104,
         exercises: [
-          { id: 'p2-straddle-planche', name: 'Straddle Planche Hold', category: 'skill', type: 'isometric', description: 'Hold straddle planche with legs apart, straight arms', formCues: ['Arms completely locked', 'Shoulders protracted', 'Back flat', 'Legs straddled wide', 'Hips at shoulder height'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 2, targetHoldMax: 6, restSeconds: 210 },
-          { id: 'p2-straddle-leans', name: 'Straddle Planche Leans', category: 'accessory', type: 'isometric', description: 'Lean forward in straddle position to build leverage strength', formCues: ['Legs straddled', 'Lean as far forward as possible', 'Keep arms locked', 'Protract shoulders', 'Build time gradually'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 12, restSeconds: 150 },
-          { id: 'p2-band-straddle', name: 'Band-Assisted Straddle Planche', category: 'accessory', type: 'isometric', description: 'Straddle planche with resistance band assistance', formCues: ['Use light band around hips', 'Focus on holding position', 'Progress to thinner bands', 'Arms locked straight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 10, restSeconds: 180 },
-          { id: 'p2-adv-pppu', name: 'Advanced PPPU (Increased Lean)', category: 'accessory', type: 'dynamic', description: 'Pseudo planche push-ups with greater lean angle', formCues: ['Hands at waist level', 'Maximum lean forward', 'Elbows tucked', 'Full ROM', 'Body stays straight'], targetSets: 4, targetRepsMin: 4, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 150 },
-          { id: 'p2-planche-negatives', name: 'Planche Negatives (Tuck to Straddle)', category: 'accessory', type: 'eccentric', description: 'Slowly lower from tuck to straddle planche position', formCues: ['Start in tuck planche', 'Slowly open legs to straddle', 'Control the descent', 'Maintain straight arms', '5+ second negative'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 210 },
-          { id: 'p2-l-sit', name: 'L-Sit Hold', category: 'core', type: 'isometric', description: 'Hold L-sit position on floor or parallettes', formCues: ['Legs straight and together', 'Hips at 90 degrees', 'Push down through hands', 'Core engaged', 'Chest up'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 10, targetHoldMax: 20, restSeconds: 90 },
+          { id: 'p2-straddle-planche', name: 'Straddle Planche Hold', category: 'skill', type: 'isometric', description: 'Open legs wide to reduce leverage — the first real planche shape', formCues: ['Arms completely locked', 'Shoulders protracted', 'Back flat', 'Legs straddled wide', 'Hips at shoulder height'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 2, targetHoldMax: 6, restSeconds: 210 },
+          { id: 'p2-straddle-leans', name: 'Straddle Planche Leans', category: 'accessory', type: 'isometric', description: 'Push lean further with straddle leg position to build leverage strength', formCues: ['Legs straddled', 'Lean as far forward as possible', 'Keep arms locked', 'Protract shoulders', 'Build time gradually'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 12, restSeconds: 150 },
+          { id: 'p2-band-straddle', name: 'Band-Assisted Straddle Planche', category: 'accessory', type: 'isometric', description: 'Use resistance band to feel the full straddle position, then wean off', formCues: ['Use light band around hips', 'Focus on holding position', 'Progress to thinner bands', 'Arms locked straight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 10, restSeconds: 180 },
+          { id: 'p2-adv-pppu', name: 'Advanced PPPU (Increased Lean)', category: 'accessory', type: 'dynamic', description: 'Deeper lean PPPU — build dynamic strength at straddle-level angles', formCues: ['Hands at waist level', 'Maximum lean forward', 'Elbows tucked', 'Full ROM', 'Body stays straight'], targetSets: 4, targetRepsMin: 4, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 150 },
+          { id: 'p2-planche-negatives', name: 'Straddle Planche Negatives', category: 'accessory', type: 'eccentric', description: 'Slow descent into straddle planche — build strength through the negative', formCues: ['Start in tuck planche', 'Slowly open legs to straddle', 'Control the descent', 'Maintain straight arms', '5+ second negative'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 210 },
+          { id: 'p2-straddle-press', name: 'Straddle Press to Handstand (Wall)', category: 'accessory', type: 'dynamic', description: 'Press from straddle L to handstand against wall — build overhead press strength', formCues: ['Start in straddle L-sit', 'Compress and press up', 'Use wall for support', 'Arms stay locked', 'Control the movement'], targetSets: 3, targetRepsMin: 3, targetRepsMax: 5, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
+          { id: 'p2-l-sit', name: 'L-Sit Hold (Parallettes)', category: 'core', type: 'isometric', description: 'Elevated L-sit on parallettes — build hip flexor and core compression', formCues: ['Legs straight and together', 'Hips at 90 degrees', 'Push down through hands', 'Core engaged', 'Chest up'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 10, targetHoldMax: 20, restSeconds: 90 },
         ],
       },
       {
@@ -263,17 +275,20 @@ export const SKILLS: SkillData[] = [
         stageNumber: 3,
         name: 'Full Planche',
         goalDescription: 'Achieve a 3-5 second Full Planche hold with legs together and straight body',
-        startMonth: 16,
-        endMonth: 24,
+        startMonth: 13,
+        endMonth: 18,
+        weeksDuration: 26,
         targetHoldMin: 3,
         targetHoldMax: 5,
-        workoutsRequired: 42,
+        workoutsRequired: 208,
         exercises: [
-          { id: 'p3-full-planche', name: 'Full Planche Hold', category: 'skill', type: 'isometric', description: 'Hold full planche with legs together and body straight', formCues: ['Legs together, straight', 'Arms completely locked', 'Hips at shoulder height', 'Full body tension', 'Protract shoulders maximally'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 1, targetHoldMax: 3, restSeconds: 300 },
-          { id: 'p3-planche-eccentrics', name: 'Full Planche Eccentrics', category: 'accessory', type: 'eccentric', description: 'Slow negative from handstand to planche or straddle to full', formCues: ['Controlled descent', '5-10 second negative', 'Arms stay locked', 'Keep body tension', 'Use spotter if needed'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 300 },
-          { id: 'p3-extreme-pppu', name: 'Extreme PPPU (Elevated Feet)', category: 'accessory', type: 'dynamic', description: 'Pseudo planche push-ups with feet elevated and extreme lean', formCues: ['Feet elevated on block', 'Maximum forward lean', 'Hands at waist', 'Full ROM', 'Maintain straight body'], targetSets: 4, targetRepsMin: 3, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
-          { id: 'p3-planche-press', name: 'Planche Press (Tuck/Straddle to Handstand)', category: 'accessory', type: 'dynamic', description: 'Press from planche position to handstand', formCues: ['Start in planche', 'Press up to handstand', 'Controlled movement', 'Arms stay locked', 'Use wall for safety'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
-          { id: 'p3-v-ups', name: 'V-Ups', category: 'core', type: 'dynamic', description: 'Lie flat then touch toes with hands while keeping legs straight', formCues: ['Legs straight', 'Touch toes with hands', 'Controlled movement', 'Full extension at bottom', 'Core engaged throughout'], targetSets: 4, targetRepsMin: 10, targetRepsMax: 20, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
+          { id: 'p3-full-planche', name: 'Full Planche Hold', category: 'skill', type: 'isometric', description: 'Legs together, body straight — the holy grail of planche training', formCues: ['Legs together, straight', 'Arms completely locked', 'Hips at shoulder height', 'Full body tension', 'Protract shoulders maximally'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 1, targetHoldMax: 3, restSeconds: 300 },
+          { id: 'p3-planche-eccentrics', name: 'Full Planche Eccentrics', category: 'accessory', type: 'eccentric', description: 'Slow negative from handstand to planche — strongest strength builder', formCues: ['Controlled descent', '5-10 second negative', 'Arms stay locked', 'Keep body tension', 'Use spotter if needed'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 300 },
+          { id: 'p3-extreme-pppu', name: 'Full Planche PPPU (Elevated Feet)', category: 'accessory', type: 'dynamic', description: 'PPPU with feet elevated at full planche lean angle — extreme pushing power', formCues: ['Feet elevated on block', 'Maximum forward lean', 'Hands at waist', 'Full ROM', 'Maintain straight body'], targetSets: 4, targetRepsMin: 3, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
+          { id: 'p3-planche-press', name: 'Planche Press to Handstand', category: 'accessory', type: 'dynamic', description: 'Press from planche to handstand — build overhead strength and control', formCues: ['Start in planche', 'Press up to handstand', 'Controlled movement', 'Arms stay locked', 'Use wall for safety'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
+          { id: 'p3-straddle-to-full', name: 'Straddle to Full Planche Transition', category: 'accessory', type: 'dynamic', description: 'Slowly bring legs together from straddle planche — bridge the gap', formCues: ['Start in straddle planche', 'Slowly close legs', 'Maintain lean and height', 'Arms stay locked', 'Control is key'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
+          { id: 'p3-dragon-press', name: 'Dragon Press (Pike Push-up to Planche)', category: 'accessory', type: 'dynamic', description: 'From pike push-up, lean into planche position and press back — combo strength', formCues: ['Start in pike', 'Lean forward to planche', 'Press back to pike', 'Arms bend then extend', 'Controlled movement'], targetSets: 3, targetRepsMin: 3, targetRepsMax: 5, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
+          { id: 'p3-dragon-flags', name: 'Dragon Flags', category: 'core', type: 'eccentric', description: 'Full body core strength — lower straight body with only shoulders on bench', formCues: ['Body stays straight', 'Lower slowly', 'Only shoulders touch bench', 'Control the movement', 'Core braced tight'], targetSets: 4, targetRepsMin: 5, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
         ],
       },
       {
@@ -281,16 +296,19 @@ export const SKILLS: SkillData[] = [
         stageNumber: 4,
         name: 'Mastering Full Planche',
         goalDescription: 'Achieve a consistent 10+ second Full Planche hold and integrate dynamic elements',
-        startMonth: 25,
-        endMonth: 30,
+        startMonth: 19,
+        endMonth: 24,
+        weeksDuration: 26,
         targetHoldMin: 10,
         targetHoldMax: 15,
-        workoutsRequired: 70,
+        workoutsRequired: 312,
         exercises: [
-          { id: 'p4-full-planche-hold', name: 'Sustained Full Planche Hold', category: 'skill', type: 'isometric', description: 'Hold full planche for maximum time, focusing on consistency', formCues: ['Perfect form every rep', 'Legs together', 'Arms locked', 'Build endurance', 'Multiple sets'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 3, targetHoldMax: 8, restSeconds: 300 },
-          { id: 'p4-planche-pushups', name: 'Planche Push-ups', category: 'skill', type: 'dynamic', description: 'Push-ups performed in full planche position', formCues: ['Start in full planche', 'Bend arms while maintaining position', 'Push back up', 'Controlled movement', 'Full ROM'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 300 },
-          { id: 'p4-planche-transitions', name: 'Planche to Handstand Transitions', category: 'skill', type: 'dynamic', description: 'Dynamic transitions between planche and handstand', formCues: ['Start in planche', 'Press to handstand', 'Lower back to planche', 'Smooth transitions', 'Build flow'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
-          { id: 'p4-hollow-body-advanced', name: 'Hollow Body Rocks', category: 'core', type: 'dynamic', description: 'Hollow body position with controlled rocking motion', formCues: ['Maintain hollow body', 'Rock from shoulders to hips', 'No piking at hips', 'Arms overhead', 'Continuous tension'], targetSets: 4, targetRepsMin: 20, targetRepsMax: 40, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
+          { id: 'p4-full-planche-hold', name: 'Sustained Full Planche Hold', category: 'skill', type: 'isometric', description: 'Build endurance — hold full planche for 10+ seconds with perfect form', formCues: ['Perfect form every rep', 'Legs together', 'Arms locked', 'Build endurance', 'Multiple sets'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 3, targetHoldMax: 8, restSeconds: 300 },
+          { id: 'p4-planche-pushups', name: 'Planche Push-ups', category: 'skill', type: 'dynamic', description: 'Bend arms in full planche — the ultimate pushing expression', formCues: ['Start in full planche', 'Bend arms while maintaining position', 'Push back up', 'Controlled movement', 'Full ROM'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 300 },
+          { id: 'p4-planche-transitions', name: 'Planche to Handstand Flow', category: 'skill', type: 'dynamic', description: 'Seamless transitions between planche and handstand — build control and flow', formCues: ['Start in planche', 'Press to handstand', 'Lower back to planche', 'Smooth transitions', 'Build flow'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
+          { id: 'p4-planche-superman', name: 'Full Planche Superman Transitions', category: 'skill', type: 'dynamic', description: 'Move from planche to superman (arch) and back — dynamic full-body control', formCues: ['Start in full planche', 'Transition to superman arch', 'Return to planche', 'Keep arms locked', 'Smooth flow'], targetSets: 3, targetRepsMin: 2, targetRepsMax: 4, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
+          { id: 'p4-1-arm-assist', name: 'One-Arm Assisted Planche Hold', category: 'accessory', type: 'isometric', description: 'Full planche with one hand on a block or fingertips — start building 1-arm strength', formCues: ['One hand flat, one on fingertips', 'Keep full planche shape', 'Shift weight to full hand', 'Arms locked', 'Hold for time'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 2, targetHoldMax: 5, restSeconds: 300 },
+          { id: 'p4-hollow-body-advanced', name: 'Hollow Body Rocks (Weighted)', category: 'core', type: 'dynamic', description: 'Weighted hollow body rocks — elite-level core endurance', formCues: ['Hold weight behind head', 'Maintain hollow body', 'Rock from shoulders to hips', 'No piking at hips', 'Continuous tension'], targetSets: 4, targetRepsMin: 20, targetRepsMax: 40, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
         ],
       },
     ],
@@ -308,16 +326,18 @@ export const SKILLS: SkillData[] = [
         goalDescription: 'Achieve a consistent 15-20 second Advanced Tuck FL hold and progress to a 5-10 second One-Leg FL hold',
         startMonth: 1,
         endMonth: 6,
+        weeksDuration: 26,
         targetHoldMin: 15,
         targetHoldMax: 20,
         workoutsRequired: 0,
         exercises: [
-          { id: 'fl1-adv-tuck-fl', name: 'Advanced Tuck Front Lever Hold', category: 'skill', type: 'isometric', description: 'Hold advanced tuck front lever with back flat and hips extended', formCues: ['Hang from bar with straight arms', 'Lift body to horizontal', 'Back flat, not rounded', 'Hips extended past 90°', 'Retract shoulders', 'Core braced tight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 12, restSeconds: 180 },
-          { id: 'fl1-one-leg-fl', name: 'One-Leg Front Lever Hold', category: 'skill', type: 'isometric', description: 'Front lever with one leg extended, one leg tucked', formCues: ['One leg straight, one tucked', 'Keep arms locked', 'Body horizontal', 'Retract shoulders', 'Switch legs each set'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 3, targetHoldMax: 8, restSeconds: 180 },
-          { id: 'fl1-fl-raises', name: 'Front Lever Raises (Adv Tuck)', category: 'accessory', type: 'dynamic', description: 'Raise from hang to advanced tuck front lever position repeatedly', formCues: ['Start from dead hang', 'Raise to FL position', 'Control the movement', 'Arms stay straight', 'Pull with lats'], targetSets: 3, targetRepsMin: 5, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
-          { id: 'fl1-fl-rows', name: 'Front Lever Rows (Adv Tuck)', category: 'accessory', type: 'dynamic', description: 'Rows performed in advanced tuck front lever position', formCues: ['Maintain FL position', 'Pull chest to bar', 'Arms bend and extend', 'Keep body horizontal', 'Control the movement'], targetSets: 3, targetRepsMin: 5, targetRepsMax: 10, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
-          { id: 'fl1-scap-pulls', name: 'Scapular Pulls', category: 'accessory', type: 'dynamic', description: 'Hanging from bar, pull shoulder blades down and together', formCues: ['Arms stay straight', 'Only scapulae move', 'Pull shoulders down', 'Squeeze lats', 'Full range of motion'], targetSets: 3, targetRepsMin: 10, targetRepsMax: 15, targetHoldMin: null, targetHoldMax: null, restSeconds: 90 },
-          { id: 'fl1-hanging-leg-raises', name: 'Hanging Leg Raises', category: 'core', type: 'dynamic', description: 'Hang from bar and raise straight legs to bar height', formCues: ['Arms straight', 'Legs straight and together', 'Raise to bar height', 'Control the descent', 'No swinging'], targetSets: 3, targetRepsMin: 8, targetRepsMax: 12, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
+          { id: 'fl1-adv-tuck-fl', name: 'Advanced Tuck Front Lever Hold', category: 'skill', type: 'isometric', description: 'Foundation hold — build straight-arm pulling strength with flat back', formCues: ['Hang from bar with straight arms', 'Lift body to horizontal', 'Back flat, not rounded', 'Hips extended past 90°', 'Retract shoulders', 'Core braced tight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 12, restSeconds: 180 },
+          { id: 'fl1-one-leg-fl', name: 'One-Leg Front Lever Hold', category: 'skill', type: 'isometric', description: 'Bridge to straddle — extend one leg while keeping position stable', formCues: ['One leg straight, one tucked', 'Keep arms locked', 'Body horizontal', 'Retract shoulders', 'Switch legs each set'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 3, targetHoldMax: 8, restSeconds: 180 },
+          { id: 'fl1-fl-raises', name: 'Front Lever Raises (Adv Tuck)', category: 'accessory', type: 'dynamic', description: 'Dynamic pull from hang to FL position — build explosive lat strength', formCues: ['Start from dead hang', 'Raise to FL position', 'Control the movement', 'Arms stay straight', 'Pull with lats'], targetSets: 3, targetRepsMin: 5, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
+          { id: 'fl1-fl-rows', name: 'Front Lever Rows (Adv Tuck)', category: 'accessory', type: 'dynamic', description: 'Rows in FL position — build pulling strength at horizontal', formCues: ['Maintain FL position', 'Pull chest to bar', 'Arms bend and extend', 'Keep body horizontal', 'Control the movement'], targetSets: 3, targetRepsMin: 5, targetRepsMax: 10, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
+          { id: 'fl1-scap-pulls', name: 'Scapular Pulls', category: 'accessory', type: 'dynamic', description: 'Isolate scapular depression — the foundation of all pulling strength', formCues: ['Arms stay straight', 'Only scapulae move', 'Pull shoulders down', 'Squeeze lats', 'Full range of motion'], targetSets: 3, targetRepsMin: 10, targetRepsMax: 15, targetHoldMin: null, targetHoldMax: null, restSeconds: 90 },
+          { id: 'fl1-inverted-hang', name: 'Inverted Hang Hold', category: 'accessory', type: 'isometric', description: 'Hang upside down with straight body — build comfort and shoulder stability', formCues: ['Body fully inverted', 'Arms straight', 'Core engaged', 'Shoulders active', 'Build to 30+ seconds'], targetSets: 3, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 15, targetHoldMax: 30, restSeconds: 90 },
+          { id: 'fl1-hanging-leg-raises', name: 'Hanging Leg Raises', category: 'core', type: 'dynamic', description: 'Build core compression strength needed for front lever', formCues: ['Arms straight', 'Legs straight and together', 'Raise to bar height', 'Control the descent', 'No swinging'], targetSets: 3, targetRepsMin: 8, targetRepsMax: 12, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
         ],
       },
       {
@@ -326,17 +346,19 @@ export const SKILLS: SkillData[] = [
         name: 'Straddle Front Lever',
         goalDescription: 'Achieve a consistent 10-15 second Straddle Front Lever hold with perfect form',
         startMonth: 7,
-        endMonth: 15,
+        endMonth: 12,
+        weeksDuration: 26,
         targetHoldMin: 10,
         targetHoldMax: 15,
-        workoutsRequired: 18,
+        workoutsRequired: 104,
         exercises: [
-          { id: 'fl2-straddle-fl', name: 'Straddle Front Lever Hold', category: 'skill', type: 'isometric', description: 'Hold straddle front lever with legs apart and body horizontal', formCues: ['Legs straddled wide', 'Arms locked straight', 'Body horizontal', 'Shoulders retracted', 'Core engaged'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 2, targetHoldMax: 8, restSeconds: 210 },
-          { id: 'fl2-straddle-fl-rows', name: 'Straddle FL Rows', category: 'accessory', type: 'dynamic', description: 'Rows performed in straddle front lever position', formCues: ['Maintain straddle FL', 'Pull chest to bar', 'Control the movement', 'Keep body horizontal', 'Legs stay straddled'], targetSets: 4, targetRepsMin: 3, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 150 },
-          { id: 'fl2-band-straddle-fl', name: 'Band-Assisted Straddle FL', category: 'accessory', type: 'isometric', description: 'Straddle front lever with resistance band assistance', formCues: ['Use light band for assistance', 'Focus on position quality', 'Progress to thinner bands', 'Arms stay straight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 10, restSeconds: 180 },
-          { id: 'fl2-ice-cream-makers', name: 'Ice Cream Makers', category: 'accessory', type: 'dynamic', description: 'From front lever, extend arms to invert, then return to FL', formCues: ['Start in FL position', 'Extend to inverted hang', 'Return to FL', 'Controlled movement', 'Arms stay straight'], targetSets: 4, targetRepsMin: 2, targetRepsMax: 5, targetHoldMin: null, targetHoldMax: null, restSeconds: 150 },
-          { id: 'fl2-pullups-hard', name: 'Advanced Pull-up Variations', category: 'accessory', type: 'dynamic', description: 'Harder pull-up variations (L-sit pull-ups, wide grip)', formCues: ['Full range of motion', 'Control the negative', 'Squeeze at top', 'Vary grip width', 'Add pause at top'], targetSets: 4, targetRepsMin: 5, targetRepsMax: 10, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
-          { id: 'fl2-hanging-leg-raises-adv', name: 'Hanging Leg Raises (Weighted)', category: 'core', type: 'dynamic', description: 'Hanging leg raises with added weight between feet', formCues: ['Add light weight between feet', 'Legs straight', 'Raise to bar height', 'Control the descent', 'No swinging'], targetSets: 4, targetRepsMin: 5, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
+          { id: 'fl2-straddle-fl', name: 'Straddle Front Lever Hold', category: 'skill', type: 'isometric', description: 'Open legs wide — the first real front lever shape', formCues: ['Legs straddled wide', 'Arms locked straight', 'Body horizontal', 'Shoulders retracted', 'Core engaged'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 2, targetHoldMax: 8, restSeconds: 210 },
+          { id: 'fl2-straddle-fl-rows', name: 'Straddle FL Rows', category: 'accessory', type: 'dynamic', description: 'Dynamic rows in straddle FL — build pulling power at straddle leverage', formCues: ['Maintain straddle FL', 'Pull chest to bar', 'Control the movement', 'Keep body horizontal', 'Legs stay straddled'], targetSets: 4, targetRepsMin: 3, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 150 },
+          { id: 'fl2-band-straddle-fl', name: 'Band-Assisted Straddle FL', category: 'accessory', type: 'isometric', description: 'Use band to feel the full straddle position, then progressively wean off', formCues: ['Use light band for assistance', 'Focus on position quality', 'Progress to thinner bands', 'Arms stay straight'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 10, restSeconds: 180 },
+          { id: 'fl2-ice-cream-makers', name: 'Ice Cream Makers', category: 'accessory', type: 'dynamic', description: 'FL to inverted hang and back — build dynamic control and shoulder strength', formCues: ['Start in FL position', 'Extend to inverted hang', 'Return to FL', 'Controlled movement', 'Arms stay straight'], targetSets: 4, targetRepsMin: 2, targetRepsMax: 5, targetHoldMin: null, targetHoldMax: null, restSeconds: 150 },
+          { id: 'fl2-pullups-hard', name: 'L-Sit Pull-ups', category: 'accessory', type: 'dynamic', description: 'Pull-ups with legs in L-sit — extra core and lat demand', formCues: ['Hold L-sit throughout', 'Full range of motion', 'Control the negative', 'Squeeze lats at top', 'No kipping'], targetSets: 4, targetRepsMin: 5, targetRepsMax: 10, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
+          { id: 'fl2-fl-negatives', name: 'Straddle FL Negatives', category: 'accessory', type: 'eccentric', description: 'Slow descent from inverted hang to straddle FL — overload the negative', formCues: ['Start inverted', 'Slow descent', '5+ second negative', 'Arms stay locked', 'Control every inch'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 180 },
+          { id: 'fl2-hanging-leg-raises-adv', name: 'Hanging Leg Raises (Weighted)', category: 'core', type: 'dynamic', description: 'Weighted leg raises — build elite core compression for full FL', formCues: ['Add light weight between feet', 'Legs straight', 'Raise to bar height', 'Control the descent', 'No swinging'], targetSets: 4, targetRepsMin: 5, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
         ],
       },
       {
@@ -344,17 +366,19 @@ export const SKILLS: SkillData[] = [
         stageNumber: 3,
         name: 'Full Front Lever',
         goalDescription: 'Achieve a 5-10 second Full Front Lever hold with legs together and straight body',
-        startMonth: 16,
-        endMonth: 24,
+        startMonth: 13,
+        endMonth: 18,
+        weeksDuration: 26,
         targetHoldMin: 5,
         targetHoldMax: 10,
-        workoutsRequired: 42,
+        workoutsRequired: 208,
         exercises: [
-          { id: 'fl3-full-fl', name: 'Full Front Lever Hold', category: 'skill', type: 'isometric', description: 'Hold full front lever with legs together and body completely horizontal', formCues: ['Legs together, straight', 'Body completely horizontal', 'Arms locked', 'Shoulders retracted', 'Full body tension'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 1, targetHoldMax: 5, restSeconds: 300 },
-          { id: 'fl3-fl-negatives', name: 'Full Front Lever Negatives', category: 'accessory', type: 'eccentric', description: 'Slowly lower from inverted hang to full front lever', formCues: ['Start inverted', 'Slow descent to FL', '5-10 second negative', 'Arms locked', 'Control every inch'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 300 },
-          { id: 'fl3-weighted-pullups', name: 'Weighted Pull-ups', category: 'accessory', type: 'dynamic', description: 'Pull-ups with added weight for building pulling strength', formCues: ['Full ROM', 'Control the negative', 'Add weight progressively', 'Squeeze lats at top', 'Use dip belt or backpack'], targetSets: 4, targetRepsMin: 4, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
-          { id: 'fl3-straight-arm-pulldowns', name: 'Straight Arm Pulldowns (Band)', category: 'accessory', type: 'dynamic', description: 'Pulldowns with straight arms using resistance band', formCues: ['Arms stay straight', 'Pull band down to hips', 'Squeeze lats', 'Control the return', 'Full ROM'], targetSets: 4, targetRepsMin: 6, targetRepsMax: 10, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
-          { id: 'fl3-dragon-flags', name: 'Dragon Flags', category: 'core', type: 'eccentric', description: 'Lie on bench/ground, grip behind head, lower straight body', formCues: ['Body stays straight', 'Lower slowly', 'Only shoulders touch bench', 'Control the movement', 'Core braced tight'], targetSets: 4, targetRepsMin: 4, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
+          { id: 'fl3-full-fl', name: 'Full Front Lever Hold', category: 'skill', type: 'isometric', description: 'Legs together, body horizontal — the holy grail of front lever', formCues: ['Legs together, straight', 'Body completely horizontal', 'Arms locked', 'Shoulders retracted', 'Full body tension'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 1, targetHoldMax: 5, restSeconds: 300 },
+          { id: 'fl3-fl-negatives', name: 'Full Front Lever Negatives', category: 'accessory', type: 'eccentric', description: 'Slow negative from inverted hang — the strongest FL strength builder', formCues: ['Start inverted', 'Slow descent to FL', '5-10 second negative', 'Arms locked', 'Control every inch'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 4, targetHoldMax: 8, restSeconds: 300 },
+          { id: 'fl3-weighted-pullups', name: 'Weighted Pull-ups', category: 'accessory', type: 'dynamic', description: 'Heavy pull-ups with added weight — build raw lat and bicep strength', formCues: ['Full ROM', 'Control the negative', 'Add weight progressively', 'Squeeze lats at top', 'Use dip belt or backpack'], targetSets: 4, targetRepsMin: 4, targetRepsMax: 6, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
+          { id: 'fl3-straddle-to-full', name: 'Straddle to Full FL Transition', category: 'accessory', type: 'dynamic', description: 'Close legs from straddle FL to full FL — bridge the gap', formCues: ['Start in straddle FL', 'Slowly bring legs together', 'Maintain height and tension', 'Arms stay locked', 'Control is everything'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
+          { id: 'fl3-fl-rows-full', name: 'Full FL Rows (Assisted)', category: 'accessory', type: 'dynamic', description: 'Rows in full FL position with band assist — build dynamic pulling at full leverage', formCues: ['Maintain FL position', 'Use band for assistance', 'Pull chest to bar', 'Full ROM', 'Progressively remove band'], targetSets: 4, targetRepsMin: 2, targetRepsMax: 4, targetHoldMin: null, targetHoldMax: null, restSeconds: 180 },
+          { id: 'fl3-dragon-flags', name: 'Dragon Flags', category: 'core', type: 'eccentric', description: 'Full body core strength — the gold standard of calisthenics core work', formCues: ['Body stays straight', 'Lower slowly', 'Only shoulders touch bench', 'Control the movement', 'Core braced tight'], targetSets: 4, targetRepsMin: 5, targetRepsMax: 8, targetHoldMin: null, targetHoldMax: null, restSeconds: 120 },
         ],
       },
       {
@@ -362,16 +386,19 @@ export const SKILLS: SkillData[] = [
         stageNumber: 4,
         name: 'Mastering Full Front Lever',
         goalDescription: 'Achieve a consistent 15+ second Full Front Lever hold and integrate dynamic elements',
-        startMonth: 25,
-        endMonth: 30,
+        startMonth: 19,
+        endMonth: 24,
+        weeksDuration: 26,
         targetHoldMin: 15,
         targetHoldMax: 20,
-        workoutsRequired: 70,
+        workoutsRequired: 312,
         exercises: [
-          { id: 'fl4-sustained-fl', name: 'Sustained Full FL Hold', category: 'skill', type: 'isometric', description: 'Hold full front lever for maximum time, focusing on endurance', formCues: ['Perfect form every rep', 'Legs together', 'Arms locked', 'Build endurance', 'Multiple sets'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 10, restSeconds: 300 },
-          { id: 'fl4-fl-pullups', name: 'Front Lever Pull-ups', category: 'skill', type: 'dynamic', description: 'Pull-ups performed in full front lever position', formCues: ['Maintain FL position', 'Pull chest to bar', 'Bend arms while horizontal', 'Full ROM', 'Controlled movement'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 300 },
-          { id: 'fl4-fl-transitions', name: 'FL Transitions', category: 'skill', type: 'dynamic', description: 'Dynamic transitions between FL variations', formCues: ['Move between FL positions', 'Smooth transitions', 'Maintain tension', 'Build flow', 'Full control'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
-          { id: 'fl4-hollow-body-adv', name: 'Hollow Body Rocks (Weighted)', category: 'core', type: 'dynamic', description: 'Hollow body rocks with weight held behind head', formCues: ['Hold light weight behind head', 'Maintain hollow body', 'Rock from shoulders to hips', 'Continuous tension', 'Full control'], targetSets: 4, targetRepsMin: 15, targetRepsMax: 30, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
+          { id: 'fl4-sustained-fl', name: 'Sustained Full FL Hold', category: 'skill', type: 'isometric', description: 'Build endurance — hold full FL for 15+ seconds with perfect form', formCues: ['Perfect form every rep', 'Legs together', 'Arms locked', 'Build endurance', 'Multiple sets'], targetSets: 5, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 5, targetHoldMax: 10, restSeconds: 300 },
+          { id: 'fl4-fl-pullups', name: 'Front Lever Pull-ups', category: 'skill', type: 'dynamic', description: 'Pull-ups in full FL — the ultimate pulling expression', formCues: ['Maintain FL position', 'Pull chest to bar', 'Bend arms while horizontal', 'Full ROM', 'Controlled movement'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 300 },
+          { id: 'fl4-fl-transitions', name: 'FL to Muscle-Up Flow', category: 'skill', type: 'dynamic', description: 'Transition from FL to muscle-up and back — elite dynamic control', formCues: ['Start in full FL', 'Pull to muscle-up', 'Return to FL', 'Smooth transitions', 'Full control'], targetSets: 4, targetRepsMin: 1, targetRepsMax: 3, targetHoldMin: null, targetHoldMax: null, restSeconds: 240 },
+          { id: 'fl4-1-arm-fl-assist', name: 'One-Arm Assisted FL Hold', category: 'accessory', type: 'isometric', description: 'Full FL with one hand on towel or fingertips — start building 1-arm FL', formCues: ['One hand grips bar fully', 'Other hand on towel/fingertips', 'Maintain FL shape', 'Shift weight to full hand', 'Hold for time'], targetSets: 4, targetRepsMin: null, targetRepsMax: null, targetHoldMin: 2, targetHoldMax: 5, restSeconds: 300 },
+          { id: 'fl4-360-pull', name: 'FL 360° Pull', category: 'skill', type: 'dynamic', description: 'Pull from FL around the bar in a full circle — elite skill', formCues: ['Start in full FL', 'Pull and rotate around bar', 'Complete the circle', 'Arms stay engaged', 'Controlled movement'], targetSets: 3, targetRepsMin: 1, targetRepsMax: 2, targetHoldMin: null, targetHoldMax: null, restSeconds: 300 },
+          { id: 'fl4-hollow-body-adv', name: 'Hollow Body Rocks (Weighted)', category: 'core', type: 'dynamic', description: 'Weighted hollow body rocks — elite-level core endurance', formCues: ['Hold weight behind head', 'Maintain hollow body', 'Rock from shoulders to hips', 'Continuous tension', 'Full control'], targetSets: 4, targetRepsMin: 20, targetRepsMax: 40, targetHoldMin: null, targetHoldMax: null, restSeconds: 60 },
         ],
       },
     ],
